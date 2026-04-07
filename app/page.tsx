@@ -159,6 +159,17 @@ export default function VendedorTRR_Master() {
               <button title="GPS" onClick={() => abrirModal('gps', lead)} className="h-6 w-8 bg-zinc-800 rounded flex items-center justify-center text-[10px] hover:bg-zinc-700 transition-colors">📍</button>
               <button title="Reagendar" onClick={() => abrirModal('reagendar', lead)} className="h-6 w-8 bg-zinc-800 rounded flex items-center justify-center text-[10px] hover:bg-zinc-700 transition-colors">📅</button>
               <button title="Cadastro" onClick={() => imprimirPDF(lead)} className="h-6 w-8 bg-zinc-800 rounded flex items-center justify-center text-[10px] hover:bg-zinc-700 transition-colors">📝</button>
+              
+              {/* --- NOVOS BOTÕES DE FLUXO --- */}
+              {aba === 'estoque' && (
+                <button title="Enviar para Triagem" onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: 'Triagem'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-6 w-8 bg-blue-600 rounded flex items-center justify-center text-[10px] text-white hover:bg-blue-500 transition-colors">➡️</button>
+              )}
+
+              {aba === 'triagem' && (
+                <button title="Enviar para Meu To Do" onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: 'Em Prospecção'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-6 w-8 bg-orange-600 rounded flex items-center justify-center text-[10px] text-white hover:bg-orange-500 transition-colors">➡️</button>
+              )}
+              {/* ----------------------------- */}
+
               <button title="Concluir" onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: 'Viável'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-6 w-8 bg-white rounded flex items-center justify-center text-[10px] text-black shadow-sm hover:bg-gray-200 transition-colors">✅</button>
             </div>
           </div>
