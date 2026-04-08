@@ -31,8 +31,6 @@ export default function VendedorTRR_Master() {
         if (aba === 'estoque') query = query.eq('status_lead', 'Novo');
         if (aba === 'triagem') query = query.eq('status_lead', 'Triagem');
         if (aba === 'agenda')  query = query.eq('status_lead', 'Em Prospecção');
-      } else if (moduloAtivo === 'cnpj' && cnpjBusca) {
-        query = query.eq('cnpj', cnpjBusca.replace(/\D/g, ''));
       }
       const { data } = await query.order('razao_social', { ascending: true });
       setLeads(data || []);
@@ -45,14 +43,13 @@ export default function VendedorTRR_Master() {
     const cnpjLimpo = cnpj.replace(/\D/g, '');
     if (cnpjLimpo.length !== 14) return;
     try {
-      setStatusProcesso(`Consultando: ${cnpjLimpo}...`);
+      setStatusProcesso(`Pescando: ${cnpjLimpo}...`);
       const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
       const info = await res.json();
       if (info.cnpj) {
         await supabase.from('empresas_mestre').upsert({
           cnpj: cnpjLimpo,
           razao_social: info.razao_social,
-          nome_fantasia: info.nome_fantasia,
           logradouro: info.logradouro,
           numero: info.numero,
           bairro: info.bairro,
@@ -60,11 +57,10 @@ export default function VendedorTRR_Master() {
           uf: info.uf,
           email: info.email,
           telefone: info.ddd_telefone_1,
-          cnae_principal: info.cnae_fiscal,
           status_lead: 'Novo'
         });
       }
-    } catch (err) { console.error("Erro no CNPJ"); }
+    } catch (err) { console.error(err); }
   };
 
   const extrairEPesquisar = async (e) => {
@@ -86,18 +82,9 @@ export default function VendedorTRR_Master() {
     else reader.readAsText(file);
   };
 
-  const abrirModal = (tipo, lead) => {
-    setForm({ 
-      contato: lead.contato || '', telefone: lead.telefone || '', email: lead.email || '', 
-      ie: lead.ie || '', im: lead.im || '', endereco_obra: lead.endereco_obra || '', 
-      obs: lead.obs || '', data_reagendada: '' 
-    });
-    setModal({ ativo: true, tipo, lead });
-  };
-
   const navegarGPS = (lead, app) => {
     const destino = encodeURIComponent(`${lead.razao_social}, ${lead.bairro || ''}, Manaus`);
-    window.open(app === 'waze' ? `https://waze.com/ul?q=${destino}` : `https://www.google.com/maps/search/?api=1&query=${destino}`, '_blank');
+    window.open(app === 'waze' ? `https://waze.com/ul?q=${destino}` : `http://maps.google.com/?q=${destino}`, '_blank');
   };
 
   const alternarGravacao = async (lead) => {
@@ -125,15 +112,15 @@ export default function VendedorTRR_Master() {
         };
         mediaRecorderRef.current.start();
         setGravando(true);
-      } catch (err) { alert("Microfone erro"); }
-    } else { mediaRecorderRef.current.stop(); setGravando(false); }
+      } catch (err) { alert("Microfone não permitido"); }
+    } else { mediaRecorderRef.current.stop(); setGravando(false); setModal({ ativo: false }); }
   };
 
   return (
     <div className="min-h-screen bg-black text-white pb-40 font-sans antialiased">
       <header className="px-5 pt-8 pb-4 sticky top-0 bg-black/95 border-b border-white/5 z-50">
         <div className="flex justify-between items-center mb-2">
-          <h1 className="text-[10px] font-black text-blue-500 uppercase italic">Vendedor TRR System</h1>
+          <h1 className="text-[10px] font-black text-blue-500 uppercase italic tracking-widest">Vendedor TRR System</h1>
           <div className="flex gap-3">
             {['radar', 'todo', 'arquivo', 'cnpj'].map(m => (
               <button key={m} onClick={() => setModuloAtivo(m)} className={`text-[9px] font-bold uppercase ${moduloAtivo === m ? 'text-white border-b-2 border-blue-500 pb-1' : 'text-zinc-600'}`}>{m}</button>
@@ -151,25 +138,20 @@ export default function VendedorTRR_Master() {
             <input type="file" onChange={extrairEPesquisar} className="text-xs mb-4" />
             {statusProcesso && <p className="text-blue-500 text-[10px] font-bold animate-pulse">{statusProcesso}</p>}
           </div>
-        ) : moduloAtivo === 'cnpj' ? (
-          <div className="space-y-4">
-            <textarea placeholder="Cole CNPJs..." className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-32 outline-none border border-zinc-800" onChange={(e) => setCnpjBusca(e.target.value)} />
-            <button onClick={() => { (cnpjBusca.match(/\d{14}/g) || []).forEach(processarCNPJ); sincronizar(); }} className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase">Processar</button>
-          </div>
         ) : (
           <div className="space-y-3">
             {leads.map(lead => (
               <div key={lead.cnpj} className="bg-zinc-900/40 border border-zinc-800/50 p-4 rounded-[1.5rem]">
                 <h3 className="text-[13px] font-bold uppercase truncate">{lead.razao_social}</h3>
-                <p className="text-zinc-500 text-[9px] mb-3">{lead.bairro} • {lead.cnpj}</p>
+                <p className="text-zinc-500 text-[9px] mb-3 uppercase tracking-tighter">{lead.bairro} • {lead.cnpj}</p>
                 <div className="flex flex-wrap gap-1.5">
-                  <button onClick={() => abrirModal('info', lead)} className="h-6 w-8 bg-zinc-800 rounded flex items-center justify-center text-[10px]">ℹ️</button>
-                  <button onClick={() => abrirModal('incrementar', lead)} className="h-6 w-8 bg-zinc-800 rounded flex items-center justify-center text-[10px]">➕</button>
-                  <button onClick={() => abrirModal('audio', lead)} className="h-6 w-8 bg-zinc-800 rounded flex items-center justify-center text-[10px]">🎙️</button>
-                  <button onClick={() => abrirModal('gps', lead)} className="h-6 w-8 bg-zinc-800 rounded flex items-center justify-center text-[10px]">📍</button>
-                  <button onClick={() => abrirModal('reagendar', lead)} className="h-6 w-8 bg-zinc-800 rounded flex items-center justify-center text-[10px]">📅</button>
-                  {aba === 'estoque' && moduloAtivo === 'todo' && <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: 'Triagem'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-6 w-8 bg-blue-600 rounded flex items-center justify-center text-[10px]">➡️</button>}
-                  {aba === 'triagem' && moduloAtivo === 'todo' && <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: 'Em Prospecção'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-6 w-8 bg-orange-600 rounded flex items-center justify-center text-[10px]">➡️</button>}
+                  <button onClick={() => { setForm({...lead}); setModal({ ativo: true, tipo: 'info', lead }); }} className="h-6 w-8 bg-zinc-800 rounded flex items-center justify-center text-[10px]">ℹ️</button>
+                  <button onClick={() => { setForm({...lead}); setModal({ ativo: true, tipo: 'incrementar', lead }); }} className="h-6 w-8 bg-zinc-800 rounded flex items-center justify-center text-[10px]">➕</button>
+                  <button onClick={() => setModal({ ativo: true, tipo: 'audio', lead })} className="h-6 w-8 bg-zinc-800 rounded flex items-center justify-center text-[10px]">🎙️</button>
+                  <button onClick={() => setModal({ ativo: true, tipo: 'gps', lead })} className="h-6 w-8 bg-zinc-800 rounded flex items-center justify-center text-[10px]">📍</button>
+                  <button onClick={() => setModal({ ativo: true, tipo: 'reagendar', lead })} className="h-6 w-8 bg-zinc-800 rounded flex items-center justify-center text-[10px]">📅</button>
+                  {aba === 'estoque' && <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: 'Triagem'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-6 w-8 bg-blue-600 rounded flex items-center justify-center text-[10px]">➡️</button>}
+                  {aba === 'triagem' && <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: 'Em Prospecção'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-6 w-8 bg-orange-600 rounded flex items-center justify-center text-[10px]">➡️</button>}
                   <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: 'Viável'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-6 w-8 bg-white rounded flex items-center justify-center text-[10px] text-black">✅</button>
                 </div>
               </div>
@@ -181,55 +163,47 @@ export default function VendedorTRR_Master() {
       {modal.ativo && (
         <div className="fixed inset-0 bg-black/95 z-[100] flex flex-col p-6 overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-black uppercase text-blue-500">{modal.tipo}</h3>
-            <button onClick={() => setModal({ ativo: false })} className="text-[10px]">FECHAR [X]</button>
+            <h3 className="text-xl font-black uppercase text-blue-500 italic">{modal.tipo}</h3>
+            <button onClick={() => setModal({ ativo: false })} className="text-[10px] font-bold">FECHAR [X]</button>
           </div>
           <div className="space-y-4">
-            {modal.tipo === 'gps' && (
-              <div className="grid grid-cols-2 gap-4 mt-10">
-                <button onClick={() => navegarGPS(modal.lead, 'maps')} className="bg-zinc-800 p-8 rounded-3xl">Google Maps</button>
-                <button onClick={() => navegarGPS(modal.lead, 'waze')} className="bg-zinc-800 p-8 rounded-3xl">Waze</button>
-              </div>
-            )}
             {modal.tipo === 'info' && (
-              <div className="bg-zinc-900 p-5 rounded-2xl text-sm space-y-3">
+              <div className="bg-zinc-900 p-5 rounded-2xl text-sm space-y-3 border border-zinc-800">
                 <p><strong className="text-blue-500 block text-[10px] uppercase">Razão:</strong> {modal.lead.razao_social}</p>
-                <p><strong className="text-blue-500 block text-[10px] uppercase">I.E / I.M:</strong> {modal.lead.ie || '---'} / {modal.lead.im || '---'}</p>
-                <p><strong className="text-blue-500 block text-[10px] uppercase">Contato / Tel:</strong> {modal.lead.contato || '---'} / {modal.lead.telefone || '---'}</p>
+                <p><strong className="text-blue-500 block text-[10px] uppercase">Endereço:</strong> {modal.lead.logradouro}, {modal.lead.numero} - {modal.lead.bairro}</p>
+                <p><strong className="text-blue-500 block text-[10px] uppercase">Contato/Tel:</strong> {modal.lead.contato || '---'} / {modal.lead.telefone || '---'}</p>
                 <p><strong className="text-blue-500 block text-[10px] uppercase">Obra:</strong> {modal.lead.endereco_obra || '---'}</p>
-                <div className="mt-4 p-3 bg-black/50 rounded-lg text-xs whitespace-pre-wrap">{modal.lead.obs || 'Sem notas.'}</div>
-              </div>
-            )}
-            {modal.tipo === 'reagendar' && (
-              <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl">
-                <label className="text-[10px] font-black text-zinc-500 uppercase mb-2 block">Nova data</label>
-                <input type="date" className="w-full bg-black border border-zinc-800 p-4 rounded-xl" value={form.data_reagendada} onChange={e => setForm({...form, data_reagendada: e.target.value})} />
-                <button onClick={async () => {
-                  if(!form.data_reagendada) return;
-                  await supabase.from('empresas_mestre').update({ obs: (modal.lead.obs || '') + `\n[📅 Reagendado para: ${form.data_reagendada}]` }).eq('cnpj', modal.lead.cnpj);
-                  setModal({ ativo: false }); sincronizar();
-                }} className="w-full bg-yellow-600 py-5 rounded-2xl font-black uppercase italic text-black mt-6">Confirmar</button>
+                <div className="mt-4 p-3 bg-black/50 rounded-lg text-xs whitespace-pre-wrap text-zinc-400">{modal.lead.obs || 'Sem notas.'}</div>
               </div>
             )}
             {modal.tipo === 'incrementar' && (
-              <>
+              <div className="space-y-3 pb-20">
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="text" placeholder="I.E." className="bg-zinc-800 p-4 rounded-xl" value={form.ie} onChange={e => setForm({...form, ie: e.target.value})} />
-                  <input type="text" placeholder="I.M." className="bg-zinc-800 p-4 rounded-xl" value={form.im} onChange={e => setForm({...form, im: e.target.value})} />
+                  <input type="text" placeholder="I.E." className="bg-zinc-800 p-4 rounded-xl text-sm" value={form.ie} onChange={e => setForm({...form, ie: e.target.value})} />
+                  <input type="text" placeholder="I.M." className="bg-zinc-800 p-4 rounded-xl text-sm" value={form.im} onChange={e => setForm({...form, im: e.target.value})} />
                 </div>
-                <input type="text" placeholder="Contato" className="bg-zinc-800 p-4 rounded-xl w-full" value={form.contato} onChange={e => setForm({...form, contato: e.target.value})} />
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="text" placeholder="Telefone" className="bg-zinc-800 p-4 rounded-xl" value={form.telefone} onChange={e => setForm({...form, telefone: e.target.value})} />
-                  <input type="text" placeholder="E-mail" className="bg-zinc-800 p-4 rounded-xl" value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
-                </div>
-                <input type="text" placeholder="Local da Obra" className="bg-zinc-800 p-4 rounded-xl w-full" value={form.endereco_obra} onChange={e => setForm({...form, endereco_obra: e.target.value})} />
-                <textarea placeholder="Obs..." className="bg-zinc-800 p-4 rounded-xl w-full h-32" value={form.obs} onChange={e => setForm({...form, obs: e.target.value})} />
-                <button onClick={async () => { await supabase.from('empresas_mestre').update({...form}).eq('cnpj', modal.lead.cnpj); setModal({ ativo: false }); sincronizar(); }} className="w-full bg-blue-600 py-5 rounded-2xl font-black uppercase">SALVAR</button>
-              </>
+                <input type="text" placeholder="Contato" className="w-full bg-zinc-800 p-4 rounded-xl text-sm" value={form.contato} onChange={e => setForm({...form, contato: e.target.value})} />
+                <input type="text" placeholder="Local da Obra" className="w-full bg-zinc-800 p-4 rounded-xl text-sm" value={form.endereco_obra} onChange={e => setForm({...form, endereco_obra: e.target.value})} />
+                <textarea placeholder="Observações..." className="w-full bg-zinc-800 p-4 rounded-xl text-sm h-32" value={form.obs} onChange={e => setForm({...form, obs: e.target.value})} />
+                <button onClick={async () => { await supabase.from('empresas_mestre').update({...form}).eq('cnpj', modal.lead.cnpj); setModal({ ativo: false }); sincronizar(); }} className="w-full bg-blue-600 py-5 rounded-2xl font-black uppercase">Salvar no Banco</button>
+              </div>
+            )}
+            {modal.tipo === 'gps' && (
+              <div className="grid grid-cols-2 gap-4 mt-10">
+                <button onClick={() => navegarGPS(modal.lead, 'maps')} className="bg-zinc-800 p-8 rounded-3xl flex flex-col items-center">🗺️ Maps</button>
+                <button onClick={() => navegarGPS(modal.lead, 'waze')} className="bg-zinc-800 p-8 rounded-3xl flex flex-col items-center">🚙 Waze</button>
+              </div>
             )}
             {modal.tipo === 'audio' && (
-              <div className="flex flex-col items-center py-12 bg-zinc-900 rounded-2xl">
-                <button onClick={() => alternarGravacao(modal.lead)} className={`w-24 h-24 rounded-full text-4xl ${gravando ? 'bg-red-600 animate-pulse' : 'bg-zinc-700'}`}>{gravando ? '⏹️' : '🎙️'}</button>
+              <div className="flex flex-col items-center py-12 bg-zinc-900 rounded-3xl border border-zinc-800">
+                <button onClick={() => alternarGravacao(modal.lead)} className={`w-24 h-24 rounded-full text-4xl shadow-xl transition-all ${gravando ? 'bg-red-600 animate-pulse' : 'bg-zinc-700'}`}>{gravando ? '⏹️' : '🎙️'}</button>
+                <p className="mt-4 text-xs text-zinc-500 font-bold uppercase">{gravando ? 'Gravando...' : 'Toque para Gravar'}</p>
+              </div>
+            )}
+            {modal.tipo === 'reagendar' && (
+              <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
+                <input type="date" className="w-full bg-black p-4 rounded-xl text-white outline-none" value={form.data_reagendada} onChange={e => setForm({...form, data_reagendada: e.target.value})} />
+                <button onClick={async () => { if(!form.data_reagendada) return; await supabase.from('empresas_mestre').update({ obs: (modal.lead.obs || '') + `\n[📅 Reagendado para: ${form.data_reagendada}]` }).eq('cnpj', modal.lead.cnpj); setModal({ ativo: false }); sincronizar(); }} className="w-full bg-yellow-600 py-5 rounded-2xl font-black uppercase mt-4 text-black">Confirmar Reagendamento</button>
               </div>
             )}
           </div>
@@ -237,9 +211,9 @@ export default function VendedorTRR_Master() {
       )}
 
       {moduloAtivo === 'todo' && (
-        <nav className="fixed bottom-6 left-6 right-6 h-20 bg-zinc-900 border border-white/10 rounded-[2.5rem] px-8 flex justify-between items-center z-50">
+        <nav className="fixed bottom-6 left-6 right-6 h-20 bg-zinc-900 border border-white/10 rounded-[2.5rem] px-8 flex justify-between items-center z-50 shadow-2xl">
           {['estoque', 'triagem', 'agenda'].map(a => (
-            <button key={a} onClick={() => setAba(a)} className={`text-[10px] font-black uppercase ${aba === a ? 'text-blue-500' : 'text-zinc-600'}`}>{a === 'agenda' ? 'Meu To Do' : a}</button>
+            <button key={a} onClick={() => setAba(a)} className={`text-[10px] font-black uppercase tracking-tighter transition-colors ${aba === a ? 'text-blue-500' : 'text-zinc-600'}`}>{a === 'agenda' ? 'Meu To Do' : a}</button>
           ))}
         </nav>
       )}
