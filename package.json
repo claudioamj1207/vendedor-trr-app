@@ -1,5 +1,5 @@
 {
-  "name": "vendedor-trr-v7",
+  "name": "vendedor-trr-final",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -12,6 +12,9 @@
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "@supabase/supabase-js": "latest",
-    "xlsx": "0.18.5"
+    "xlsx": "0.18.5",
+    "tailwindcss": "3.4.1",
+    "postcss": "8.4.35",
+    "autoprefixer": "10.4.18"
   }
 }
