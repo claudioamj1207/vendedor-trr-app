@@ -52,6 +52,7 @@ export default function VendedorTRR_Master() {
         await supabase.from('empresas_mestre').upsert({
           cnpj: cnpjLimpo,
           razao_social: info.razao_social,
+          nome_fantasia: info.nome_fantasia,
           logradouro: info.logradouro,
           numero: info.numero,
           bairro: info.bairro,
@@ -91,7 +92,7 @@ export default function VendedorTRR_Master() {
 
   const navegarGPS = (lead, app) => {
     const destino = encodeURIComponent(`${lead.razao_social}, ${lead.bairro || ''}, Manaus`);
-    window.open(app === 'waze' ? `https://waze.com/ul?q=${destino}` : `https://www.google.com/maps/search/${destino}`, '_blank');
+    window.open(app === 'waze' ? `https://waze.com/ul?q=${destino}` : `https://www.google.com/maps/search/?api=1&query=${destino}`, '_blank');
   };
 
   return (
