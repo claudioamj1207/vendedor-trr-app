@@ -1,4 +1,5 @@
 "use client";
+
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
@@ -6,11 +7,18 @@ import * as XLSX from 'xlsx';
 const supabase = createClient("https://qswmodzcsdkjmdzgxtlo.supabase.co", "sb_publishable_lWTV-2xQxwJlIAEn-zj_vg_z75OgB4k");
 
 export default function VendedorTRR() {
+  // O segredo está aqui: forçamos o app a carregar apenas no navegador
+  const [montado, setMontado] = useState(false);
   const [leads, setLeads] = useState([]);
   const [aba, setAba] = useState('agenda');
   const [modulo, setModulo] = useState('todo');
   const [modal, setModal] = useState({ ativo: false, tipo: '', lead: null });
   const [form, setForm] = useState({ contato: '', telefone: '', obs: '' });
+
+  useEffect(() => {
+    setMontado(true);
+    sincronizar();
+  }, [aba, modulo]);
 
   const sincronizar = async () => {
     let q = supabase.from('empresas_mestre').select('*');
@@ -23,52 +31,50 @@ export default function VendedorTRR() {
     setLeads(data || []);
   };
 
-  useEffect(() => { sincronizar(); }, [aba, modulo]);
-
-  const pescar = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      const wb = XLSX.read(evt.target.result, { type: 'binary' });
-      const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-      const cnpjs = JSON.stringify(data).match(/\d{14}/g) || [];
-      for (const c of [...new Set(cnpjs)]) {
-        await supabase.from('empresas_mestre').upsert({ cnpj: c, status_lead: 'Novo' });
-      }
-      sincronizar();
-    };
-    reader.readAsBinaryString(file);
-  };
+  if (!montado) return <div className="min-h-screen bg-black" />;
 
   return (
-    <div className="min-h-screen bg-black text-white p-4 font-sans">
+    <div className="min-h-screen bg-black text-white p-4 font-sans antialiased">
       <header className="flex justify-between items-center mb-6">
-        <h1 className="text-xl font-black italic text-blue-500 uppercase italic">Vendedor TRR</h1>
+        <h1 className="text-xl font-black italic text-blue-500 uppercase">Vendedor TRR</h1>
         <div className="flex gap-4">
-          <button onClick={() => setModulo('todo')} className={modulo === 'todo' ? 'text-blue-500 underline' : 'text-zinc-500'}>TODO</button>
-          <button onClick={() => setModulo('arquivo')} className={modulo === 'arquivo' ? 'text-blue-500 underline' : 'text-zinc-500'}>PESCADOR</button>
+          <button onClick={() => setModulo('todo')} className={`text-[10px] font-bold ${modulo === 'todo' ? 'text-blue-500 underline' : 'text-zinc-500'}`}>TODO</button>
+          <button onClick={() => setModulo('arquivo')} className={`text-[10px] font-bold ${modulo === 'arquivo' ? 'text-blue-500 underline' : 'text-zinc-500'}`}>PESCADOR</button>
         </div>
       </header>
 
       {modulo === 'arquivo' ? (
         <div className="p-10 bg-zinc-900 rounded-3xl text-center border-2 border-dashed border-zinc-800">
-          <input type="file" onChange={pescar} className="text-xs" />
+          <input type="file" onChange={async (e) => {
+             const file = e.target.files[0];
+             if (!file) return;
+             const reader = new FileReader();
+             reader.onload = async (evt) => {
+               const wb = XLSX.read(evt.target.result, { type: 'binary' });
+               const cnpjs = JSON.stringify(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]])).match(/\d{14}/g) || [];
+               for (const c of [...new Set(cnpjs)]) {
+                 await supabase.from('empresas_mestre').upsert({ cnpj: c, status_lead: 'Novo' });
+               }
+               sincronizar();
+             };
+             reader.readAsBinaryString(file);
+          }} className="text-xs" />
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4 pb-24">
           {leads.map(lead => (
-            <div key={lead.cnpj} className="bg-zinc-900 p-5 rounded-3xl border border-white/5">
-              <h3 className="text-xs font-bold uppercase truncate">{lead.razao_social || lead.cnpj}</h3>
-              <div className="grid grid-cols-4 gap-2 mt-4">
-                <button onClick={() => setModal({ ativo: true, tipo: 'INFO', lead })} className="h-10 bg-zinc-800 rounded-xl">ℹ️</button>
-                <button onClick={() => setModal({ ativo: true, tipo: 'EDITAR', lead })} className="h-10 bg-zinc-800 rounded-xl">➕</button>
-                <button className="h-10 bg-zinc-800 rounded-xl">🎙️</button>
-                <button onClick={() => window.open(`https://waze.com/ul?q=${lead.razao_social || lead.cnpj}`)} className="h-10 bg-zinc-800 rounded-xl">📍</button>
-                <button className="h-10 bg-zinc-800 rounded-xl">📅</button>
-                <button className="h-10 bg-zinc-800 rounded-xl">📝</button>
-                <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: aba === 'estoque' ? 'Triagem' : 'Em Prospecção'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-10 bg-blue-600 rounded-xl">➡️</button>
-                <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: 'Viável'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-10 bg-white text-black font-black rounded-xl">✅</button>
+            <div key={lead.cnpj} className="bg-zinc-900/50 p-5 rounded-3xl border border-white/5">
+              <h3 className="text-[13px] font-bold uppercase truncate">{lead.razao_social || lead.cnpj}</h3>
+              <p className="text-[10px] text-zinc-500 mb-4">{lead.bairro || 'Manaus'} • {lead.cnpj}</p>
+              <div className="grid grid-cols-4 gap-2">
+                <button onClick={() => setModal({ ativo: true, tipo: 'INFO', lead })} className="h-10 bg-zinc-800 rounded-xl flex items-center justify-center text-xs">ℹ️</button>
+                <button onClick={() => { setForm({...lead}); setModal({ ativo: true, tipo: 'EDITAR', lead }); }} className="h-10 bg-zinc-800 rounded-xl flex items-center justify-center text-xs">➕</button>
+                <button className="h-10 bg-zinc-800 rounded-xl flex items-center justify-center text-xs">🎙️</button>
+                <button onClick={() => window.open(`https://waze.com/ul?q=${lead.razao_social}, Manaus`)} className="h-10 bg-zinc-800 rounded-xl flex items-center justify-center text-xs">📍</button>
+                <button onClick={() => setModal({ ativo: true, tipo: 'AGENDA', lead })} className="h-10 bg-zinc-800 rounded-xl flex items-center justify-center text-xs">📅</button>
+                <button onClick={() => window.print()} className="h-10 bg-zinc-800 rounded-xl flex items-center justify-center text-xs">📝</button>
+                <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: aba === 'estoque' ? 'Triagem' : 'Em Prospecção'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-10 bg-blue-600 rounded-xl flex items-center justify-center text-xs">➡️</button>
+                <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: 'Viável'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-10 bg-white text-black font-black rounded-xl flex items-center justify-center text-xs">✅</button>
               </div>
             </div>
           ))}
@@ -76,9 +82,9 @@ export default function VendedorTRR() {
       )}
 
       {modulo === 'todo' && (
-        <nav className="fixed bottom-6 left-6 right-6 h-16 bg-zinc-900 rounded-full flex justify-around items-center border border-white/10 shadow-2xl">
+        <nav className="fixed bottom-6 left-6 right-6 h-16 bg-zinc-900/90 backdrop-blur-md rounded-full flex justify-around items-center border border-white/10">
           {['estoque', 'triagem', 'agenda'].map(a => (
-            <button key={a} onClick={() => setAba(a)} className={`text-[10px] font-black uppercase ${aba === a ? 'text-blue-500' : 'text-zinc-600'}`}>{a}</button>
+            <button key={a} onClick={() => setAba(a)} className={`text-[10px] font-black uppercase ${aba === a ? 'text-blue-500' : 'text-zinc-600'}`}>{a === 'agenda' ? 'MEU TO DO' : a}</button>
           ))}
         </nav>
       )}
