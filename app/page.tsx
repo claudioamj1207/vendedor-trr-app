@@ -52,7 +52,6 @@ export default function VendedorTRR_Master() {
         await supabase.from('empresas_mestre').upsert({
           cnpj: cnpjLimpo,
           razao_social: info.razao_social,
-          nome_fantasia: info.nome_fantasia,
           logradouro: info.logradouro,
           numero: info.numero,
           bairro: info.bairro,
@@ -92,7 +91,7 @@ export default function VendedorTRR_Master() {
 
   const navegarGPS = (lead, app) => {
     const destino = encodeURIComponent(`${lead.razao_social}, ${lead.bairro || ''}, Manaus`);
-    window.open(app === 'waze' ? `https://waze.com/ul?q=${destino}` : `https://www.google.com/maps/search/?api=1&query=${destino}`, '_blank');
+    window.open(app === 'waze' ? `https://waze.com/ul?q=${destino}` : `https://www.google.com/maps/search/${destino}`, '_blank');
   };
 
   return (
@@ -131,7 +130,7 @@ export default function VendedorTRR_Master() {
                   <button onClick={() => abrirModal('reagendar', lead)} className="h-6 w-8 bg-zinc-800 rounded flex items-center justify-center text-[10px]">📅</button>
                   {aba === 'estoque' && moduloAtivo === 'todo' && <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: 'Triagem'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-6 w-8 bg-blue-600 rounded flex items-center justify-center text-[10px]">➡️</button>}
                   {aba === 'triagem' && moduloAtivo === 'todo' && <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: 'Em Prospecção'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-6 w-8 bg-orange-600 rounded flex items-center justify-center text-[10px]">➡️</button>}
-                  <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: 'Viável'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-6 w-8 bg-white rounded flex items-center justify-center text-[10px] text-black">✅</button>
+                  <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: 'Viável'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-6 w-8 bg-white rounded flex items-center justify-center text-[10px] text-black shadow-sm">✅</button>
                 </div>
               </div>
             ))}
@@ -154,24 +153,27 @@ export default function VendedorTRR_Master() {
             )}
             {modal.tipo === 'info' && (
               <div className="bg-zinc-900 p-5 rounded-2xl text-sm space-y-3">
-                <p><strong>Razão:</strong> {modal.lead.razao_social}</p>
-                <p><strong>Contato:</strong> {modal.lead.contato || '---'}</p>
-                <p><strong>Telefone:</strong> {modal.lead.telefone || '---'}</p>
-                <p><strong>E-mail:</strong> {modal.lead.email || '---'}</p>
-                <p><strong>Endereço Obra:</strong> {modal.lead.endereco_obra || '---'}</p>
+                <p><strong className="text-blue-500 block text-[10px] uppercase">Razão:</strong> {modal.lead.razao_social}</p>
+                <p><strong className="text-blue-500 block text-[10px] uppercase">I.E / I.M:</strong> {modal.lead.ie || '---'} / {modal.lead.im || '---'}</p>
+                <p><strong className="text-blue-500 block text-[10px] uppercase">Contato / Tel:</strong> {modal.lead.contato || '---'} / {modal.lead.telefone || '---'}</p>
+                <p><strong className="text-blue-500 block text-[10px] uppercase">Obra:</strong> {modal.lead.endereco_obra || '---'}</p>
                 <div className="mt-4 p-3 bg-black/50 rounded-lg text-xs whitespace-pre-wrap">{modal.lead.obs || 'Sem notas.'}</div>
               </div>
             )}
             {modal.tipo === 'incrementar' && (
               <>
-                <input type="text" placeholder="I.E." className="bg-zinc-900 p-4 rounded-xl w-full mb-2" value={form.ie} onChange={e => setForm({...form, ie: e.target.value})} />
-                <input type="text" placeholder="I.M." className="bg-zinc-900 p-4 rounded-xl w-full mb-2" value={form.im} onChange={e => setForm({...form, im: e.target.value})} />
-                <input type="text" placeholder="Contato" className="bg-zinc-900 p-4 rounded-xl w-full mb-2" value={form.contato} onChange={e => setForm({...form, contato: e.target.value})} />
-                <input type="text" placeholder="Telefone" className="bg-zinc-900 p-4 rounded-xl w-full mb-2" value={form.telefone} onChange={e => setForm({...form, telefone: e.target.value})} />
-                <input type="text" placeholder="E-mail" className="bg-zinc-900 p-4 rounded-xl w-full mb-2" value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
-                <input type="text" placeholder="Endereço de Obra" className="bg-zinc-900 p-4 rounded-xl w-full mb-2" value={form.endereco_obra} onChange={e => setForm({...form, endereco_obra: e.target.value})} />
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="text" placeholder="I.E." className="bg-zinc-900 p-4 rounded-xl" value={form.ie} onChange={e => setForm({...form, ie: e.target.value})} />
+                  <input type="text" placeholder="I.M." className="bg-zinc-900 p-4 rounded-xl" value={form.im} onChange={e => setForm({...form, im: e.target.value})} />
+                </div>
+                <input type="text" placeholder="Contato" className="bg-zinc-900 p-4 rounded-xl w-full" value={form.contato} onChange={e => setForm({...form, contato: e.target.value})} />
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="text" placeholder="Telefone" className="bg-zinc-900 p-4 rounded-xl" value={form.telefone} onChange={e => setForm({...form, telefone: e.target.value})} />
+                  <input type="text" placeholder="E-mail" className="bg-zinc-900 p-4 rounded-xl" value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
+                </div>
+                <input type="text" placeholder="Endereço de Obra" className="bg-zinc-900 p-4 rounded-xl w-full" value={form.endereco_obra} onChange={e => setForm({...form, endereco_obra: e.target.value})} />
                 <textarea placeholder="Obs..." className="bg-zinc-900 p-4 rounded-xl w-full h-32" value={form.obs} onChange={e => setForm({...form, obs: e.target.value})} />
-                <button onClick={async () => { await supabase.from('empresas_mestre').update({...form}).eq('cnpj', modal.lead.cnpj); setModal({ ativo: false }); sincronizar(); }} className="w-full bg-blue-600 py-5 rounded-2xl font-black uppercase">Salvar</button>
+                <button onClick={async () => { await supabase.from('empresas_mestre').update({...form}).eq('cnpj', modal.lead.cnpj); setModal({ ativo: false }); sincronizar(); }} className="w-full bg-blue-600 py-5 rounded-2xl font-black uppercase">SALVAR</button>
               </>
             )}
           </div>
