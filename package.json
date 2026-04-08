@@ -5,20 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "start": "next start"
   },
   "dependencies": {
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest",
+    "next": "14.2.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
     "@supabase/supabase-js": "latest",
-    "xlsx": "0.18.5",
-    "lucide-react": "latest"
-  },
-  "devDependencies": {
-    "postcss": "latest",
-    "tailwindcss": "latest",
-    "autoprefixer": "latest"
+    "xlsx": "0.18.5"
   }
 }
