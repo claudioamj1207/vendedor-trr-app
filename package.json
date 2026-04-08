@@ -1,6 +1,6 @@
 {
-  "name": "vendedor-trr-app",
-  "version": "0.1.0",
+  "name": "vendedor-trr",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,9 +8,9 @@
     "start": "next start"
   },
   "dependencies": {
-    "next": "14.2.0",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
     "@supabase/supabase-js": "latest",
     "xlsx": "0.18.5"
   }
