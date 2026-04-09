@@ -13,10 +13,8 @@ export default function VendedorTRR_Master() {
   const [cnpjBusca, setCnpjBusca] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [statusProcesso, setStatusProcesso] = useState('');
-  const [resultadoBusca, setResultadoBusca] = useState('');
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
 
-  // FILTROS COM AMPLITUDE TOTAL
   const [filtrosAtivos, setFiltrosAtivos] = useState({
     razao_social: 'Todos',
     nome_fantasia: 'Todos',
@@ -30,12 +28,13 @@ export default function VendedorTRR_Master() {
   const sincronizar = async () => {
     try {
       setCarregando(true);
+      // Aumentado o range para 10.000 para ler toda a base de Manaus
       const { data } = await supabase
         .from('empresas_mestre')
         .select('*') 
         .eq('status_lead', aba === 'estoque' ? 'Novo' : 'Triagem')
         .order('razao_social', { ascending: true })
-        .range(0, 5000);
+        .range(0, 10000);
       setLeads(data || []);
     } finally { setCarregando(false); }
   };
@@ -51,10 +50,8 @@ export default function VendedorTRR_Master() {
       const matchFonte = filtrosAtivos.fonte_lead === 'Todos' || lead.fonte_lead === filtrosAtivos.fonte_lead;
       const matchCnaeP = filtrosAtivos.cnae_principal_descricao === 'Todos' || lead.cnae_principal_descricao === filtrosAtivos.cnae_principal_descricao;
       const matchCnaeS = filtrosAtivos.cnae_secundario === 'Todos' || (lead.cnae_secundario && lead.cnae_secundario.includes(filtrosAtivos.cnae_secundario));
-      
       const texto = buscaGlobal.toLowerCase();
       const matchBusca = !buscaGlobal || Object.values(lead).some(val => String(val).toLowerCase().includes(texto));
-
       return matchRazao && matchFantasia && matchCNPJ && matchBairro && matchFonte && matchCnaeP && matchCnaeS && matchBusca;
     });
   }, [leads, filtrosAtivos, buscaGlobal]);
@@ -85,19 +82,35 @@ export default function VendedorTRR_Master() {
           cnae_principal_codigo: String(info.cnae_fiscal),
           cnae_principal_descricao: info.cnae_fiscal_descricao || 'Não informado',
           cnae_secundario: descSec,
+          situacao_cadastral: info.descricao_situacao_cadastral || 'ATIVA',
           status_lead: leadExistente.status_lead || 'Novo'
         });
-        return !error;
+        return { ok: !error, situacao: info.descricao_situacao_cadastral };
       }
-    } catch (err) { return false; }
+    } catch (err) { return { ok: false }; }
+  };
+
+  const limparInativos = async () => {
+    if (!confirm(`O sistema irá checar os ${leadsFiltrados.length} leads filtrados e excluir CNPJs baixados ou inativos. Confirmar?`)) return;
+    let excluidos = 0;
+    for (const lead of leadsFiltrados) {
+      setStatusProcesso(`Checando: ${lead.razao_social}`);
+      const resultado = await processarCNPJ(lead.cnpj, lead);
+      if (resultado.ok && resultado.situacao !== 'ATIVA') {
+        await supabase.from('empresas_mestre').delete().eq('cnpj', lead.cnpj);
+        excluidos++;
+      }
+      await new Promise(r => setTimeout(r, 450));
+    }
+    setStatusProcesso('');
+    alert(`Limpeza concluída! ${excluidos} empresas inativas foram removidas.`);
+    sincronizar();
   };
 
   const atualizarFaltantes = async () => {
-    const { data: faltantes } = await supabase.from('empresas_mestre').select('*')
-      .or('cnae_principal_descricao.is.null,cnae_secundario.is.null,cnae_principal_descricao.eq.""');
+    const { data: faltantes } = await supabase.from('empresas_mestre').select('*').or('cnae_principal_descricao.is.null,cnae_secundario.is.null,cnae_principal_descricao.eq.""');
     if (!faltantes || faltantes.length === 0) return alert("Tudo atualizado!");
     if (!confirm(`Atualizar ${faltantes.length} leads?`)) return;
-    setResultadoBusca('');
     let sucesso = 0;
     for (const lead of faltantes) {
       sucesso++;
@@ -127,7 +140,7 @@ export default function VendedorTRR_Master() {
       <header className="px-5 pt-8 pb-4 sticky top-0 bg-black/95 border-b border-white/5 z-50">
         <div className="flex justify-between items-center mb-2">
           <h1 className="text-[10px] font-black text-blue-500 uppercase italic tracking-widest">Vendedor TRR</h1>
-          <div className="flex gap-3 text-[9px] font-bold uppercase">
+          <div className="flex gap-3 text-[9px] font-bold uppercase text-white">
              {['todo', 'arquivo', 'cnpj'].map(m => (
                <button key={m} onClick={() => setModuloAtivo(m)} className={moduloAtivo === m ? 'text-white border-b border-blue-500' : 'text-zinc-600'}>
                  {m === 'todo' ? 'LISTA' : m === 'arquivo' ? 'ARQUIVO' : 'BUSCA CNPJ'}
@@ -141,8 +154,13 @@ export default function VendedorTRR_Master() {
             {moduloAtivo === 'todo' ? (aba === 'triagem' ? 'Triagem' : 'Estoque') : 'Módulo Busca'}
           </h2>
           <div className="flex gap-2">
-            {moduloAtivo === 'todo' && <button onClick={atualizarFaltantes} className="text-[10px] bg-emerald-600 px-4 py-2 rounded-full font-bold">🔄 ENRIQUECER</button>}
-            <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className="text-[10px] bg-zinc-800 px-4 py-2 rounded-full font-bold border border-white/10">FILTROS</button>
+            {moduloAtivo === 'todo' && (
+              <>
+                <button onClick={limparInativos} className="text-[9px] bg-red-600 px-3 py-2 rounded-full font-bold">🗑️ LIMPAR INATIVOS</button>
+                <button onClick={atualizarFaltantes} className="text-[9px] bg-emerald-600 px-3 py-2 rounded-full font-bold">🔄 ENRIQUECER</button>
+              </>
+            )}
+            <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className="text-[9px] bg-zinc-800 px-3 py-2 rounded-full font-bold border border-white/10">FILTROS</button>
           </div>
         </div>
 
@@ -152,9 +170,8 @@ export default function VendedorTRR_Master() {
             {mostrarFiltros && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4 bg-zinc-900 rounded-2xl border border-white/5">
                 {[
-                  { label: 'Razão Social', campo: 'razao_social' }, { label: 'Nome Fantasia', campo: 'nome_fantasia' },
-                  { label: 'CNPJ', campo: 'cnpj' }, { label: 'Bairro', campo: 'bairro' },
-                  { label: 'Fonte', campo: 'fonte_lead' }, { label: 'CNAE Principal', campo: 'cnae_principal_descricao' }
+                  { label: 'Razão Social', campo: 'razao_social' }, { label: 'Bairro', campo: 'bairro' },
+                  { label: 'CNAE Principal', campo: 'cnae_principal_descricao' }, { label: 'Fonte', campo: 'fonte_lead' }
                 ].map(filtro => (
                   <div key={filtro.campo} className="flex flex-col gap-1">
                     <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">{filtro.label}</label>
@@ -163,10 +180,9 @@ export default function VendedorTRR_Master() {
                     </select>
                   </div>
                 ))}
-                <button onClick={() => setFiltrosAtivos({razao_social:'Todos', nome_fantasia:'Todos', cnpj:'Todos', bairro:'Todos', fonte_lead:'Todos', cnae_principal_descricao:'Todos', cnae_secundario:'Todos'})} className="lg:col-span-3 text-[9px] font-bold text-red-500 uppercase py-2 bg-red-500/10 rounded-lg">Limpar Filtros</button>
               </div>
             )}
-            <div className="flex justify-between items-center"><p className="text-[9px] text-zinc-500 font-bold uppercase">{leadsFiltrados.length} Leads</p>{statusProcesso && <p className="text-[9px] text-blue-500 animate-pulse font-black uppercase italic">{statusProcesso}</p>}</div>
+            <div className="flex justify-between items-center"><p className="text-[9px] text-zinc-500 font-bold uppercase">{leadsFiltrados.length} Leads Carregados</p>{statusProcesso && <p className="text-[9px] text-blue-500 animate-pulse font-black uppercase italic">{statusProcesso}</p>}</div>
           </div>
         )}
       </header>
@@ -178,24 +194,24 @@ export default function VendedorTRR_Master() {
           <div className="bg-zinc-900/30 border border-white/5 rounded-2xl divide-y divide-zinc-800/50">
             {carregando ? <div className="text-center py-20 text-[10px] animate-pulse text-zinc-600 font-black uppercase">Sincronizando...</div> :
             leadsFiltrados.map(lead => (
-              <div key={lead.cnpj} className="py-4 px-4 flex justify-between items-center gap-3">
+              <div key={lead.cnpj} className="py-4 px-4 flex justify-between items-center gap-3 hover:bg-zinc-800/40 transition-colors">
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-[12px] font-bold uppercase truncate text-white">{lead.razao_social}</h3>
+                  <h3 className="text-[12px] font-bold uppercase truncate text-white leading-tight">{lead.razao_social}</h3>
                   <div className="flex gap-2 mt-2 flex-wrap">
                     <span className="text-[8px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 font-bold border border-white/5 uppercase">{lead.bairro}</span>
-                    <span className="text-[8px] bg-blue-900/20 px-2 py-0.5 rounded text-blue-400 font-bold border border-blue-500/10">{lead.cnpj}</span>
+                    <span className="text-[8px] bg-blue-900/20 px-2 py-0.5 rounded text-blue-400 font-bold border border-blue-500/10 uppercase">{lead.cnpj}</span>
                     <span className="text-[8px] bg-orange-900/20 px-2 py-0.5 rounded text-orange-400 font-bold border border-orange-500/10 truncate max-w-[200px]">{lead.cnae_principal_descricao || 'SEM CNAE'}</span>
                     {lead.cnae_secundario && <span className="text-[8px] bg-zinc-900/50 px-2 py-0.5 rounded text-zinc-500 font-medium truncate max-w-[200px] italic">Sec: {lead.cnae_secundario}</span>}
                   </div>
                 </div>
-                <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: aba === 'estoque' ? 'Triagem' : 'Em Prospecção'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center text-white">➡️</button>
+                <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: aba === 'estoque' ? 'Triagem' : 'Em Prospecção'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center text-white active:scale-95 transition-all">➡️</button>
               </div>
             ))}
           </div>
         )}
       </main>
       <nav className="fixed bottom-6 left-6 right-6 h-16 bg-zinc-900/90 backdrop-blur-md border border-white/10 rounded-full px-8 flex justify-around items-center z-50">
-        {['estoque', 'triagem'].map(a => <button key={a} onClick={() => setAba(a)} className={`text-[11px] font-black uppercase ${aba === a ? 'text-blue-500' : 'text-zinc-600'}`}>{a}</button>)}
+        {['estoque', 'triagem'].map(a => <button key={a} onClick={() => setAba(a)} className={`text-[11px] font-black uppercase tracking-widest ${aba === a ? 'text-blue-500' : 'text-zinc-600'}`}>{a}</button>)}
       </nav>
     </div>
   );
