@@ -138,4 +138,73 @@ export default function VendedorTRR_Master() {
         {resultadoBusca && (
           <div className="bg-emerald-900/30 border border-emerald-500/50 p-4 rounded-2xl mb-6 flex items-center gap-3">
             <span className="text-2xl">✅</span>
-            <p className="text-emerald-400 text-xs font-bold leading-tight">{resultado
+            <p className="text-emerald-400 text-xs font-bold leading-tight">{resultadoBusca}</p>
+          </div>
+        )}
+
+        {moduloAtivo === 'arquivo' && (
+          <div className="bg-zinc-900 p-8 rounded-3xl border border-dashed border-zinc-800 text-center">
+            <input type="file" onChange={extrairEPesquisar} className="text-xs mb-4 w-full" />
+            <p className="text-xs text-zinc-500">Selecione PDF, Excel ou TXT para extrair leads</p>
+            {statusProcesso && <p className="mt-4 text-blue-500 text-[10px] animate-pulse font-bold uppercase tracking-widest">{statusProcesso}</p>}
+          </div>
+        )}
+
+        {moduloAtivo === 'cnpj' && (
+          <div className="space-y-4">
+            <textarea placeholder="Cole um ou vários CNPJs aqui..." className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-32 outline-none border border-zinc-800 focus:border-blue-500 transition-colors text-white" value={cnpjBusca} onChange={(e) => setCnpjBusca(e.target.value)} />
+            {statusProcesso && <p className="text-blue-500 text-[10px] animate-pulse font-bold text-center uppercase tracking-widest">{statusProcesso}</p>}
+            <button 
+              onClick={async () => {
+                setResultadoBusca('');
+                const lista = cnpjBusca.match(/\d{14}/g) || cnpjBusca.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g) || [];
+                if(lista.length === 0) return;
+                for (const cnpj of lista) {
+                  await processarCNPJ(cnpj, "Busca Manual");
+                }
+                setStatusProcesso('');
+                setResultadoBusca(`Sucesso! Foram lidos e processados ${lista.length} CNPJs.`);
+                setCnpjBusca('');
+                sincronizar();
+              }} 
+              className="w-full bg-blue-600 hover:bg-blue-500 transition-colors py-4 rounded-2xl font-black uppercase text-white"
+            >
+              Pesquisar e Salvar
+            </button>
+          </div>
+        )}
+
+        {moduloAtivo === 'todo' && (
+          <div className="bg-zinc-900/30 border border-white/5 rounded-2xl divide-y divide-zinc-800/50">
+            {carregando ? <div className="text-center py-20 text-[10px] animate-pulse">PROCESSANDO...</div> :
+            leads.filter(l => (l.razao_social?.toLowerCase() || "").includes(busca.toLowerCase())).map(lead => (
+              <div key={lead.cnpj} className="py-3 px-4 flex justify-between items-center gap-3 hover:bg-zinc-900/50 transition-colors">
+                <div className="flex-1 overflow-hidden text-white">
+                  <h3 className="text-[12px] font-bold uppercase truncate leading-tight">{lead.razao_social}</h3>
+                  <p className="text-[10px] text-zinc-400 uppercase truncate leading-tight mt-0.5">{lead.nome_fantasia || '---'}</p>
+                  <p className="text-zinc-500 text-[10px] mt-1.5">{lead.cnpj} • {lead.bairro}</p>
+                </div>
+                <div className="shrink-0">
+                  {aba === 'estoque' && (
+                    <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: 'Triagem'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-9 w-12 bg-blue-600 rounded-xl flex items-center justify-center text-sm active:scale-95 transition-transform text-white">➡️</button>
+                  )}
+                  {aba === 'triagem' && (
+                    <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: 'Em Prospecção'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-9 w-12 bg-orange-600 rounded-xl flex items-center justify-center text-sm active:scale-95 transition-transform text-white" title="Enviar para App de Campo">➡️</button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+
+      {moduloAtivo === 'todo' && (
+        <nav className="fixed bottom-6 left-6 right-6 h-16 bg-zinc-900 border border-white/10 rounded-full px-8 flex justify-around items-center z-50 shadow-2xl">
+          {['estoque', 'triagem'].map(a => (
+            <button key={a} onClick={() => setAba(a)} className={`text-[11px] font-black uppercase tracking-widest ${aba === a ? 'text-blue-500' : 'text-zinc-600'}`}>{a}</button>
+          ))}
+        </nav>
+      )}
+    </div>
+  );
+}
