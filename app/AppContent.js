@@ -16,6 +16,7 @@ export default function VendedorTRR_Master() {
   const [resultadoBusca, setResultadoBusca] = useState('');
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
 
+  // Estados dos Filtros (Estilo Excel - Múltiplas Escolhas)
   const [filtrosAtivos, setFiltrosAtivos] = useState({
     razao_social: 'Todos',
     nome_fantasia: 'Todos',
@@ -37,6 +38,7 @@ export default function VendedorTRR_Master() {
     } finally { setCarregando(false); }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { sincronizar(); }, [aba, moduloAtivo]);
 
   const leadsFiltrados = useMemo(() => {
@@ -70,6 +72,7 @@ export default function VendedorTRR_Master() {
       const info = await res.json();
       
       if (info.cnpj) {
+        // Mapeamento exato baseado na imagem do seu banco de dados
         await supabase.from('empresas_mestre').upsert({
           cnpj: cnpjLimpo,
           razao_social: info.razao_social,
@@ -79,7 +82,10 @@ export default function VendedorTRR_Master() {
           bairro: info.bairro,
           municipio: info.municipio,
           uf: info.uf,
-          // Ajustado para bater com as colunas reais do seu Supabase:
+          cep: info.cep,
+          email: info.email,
+          telefone: info.ddd_telefone_1,
+          // NOMES DAS COLUNAS AJUSTADOS PARA O SEU SUPABASE:
           cnae_principal_codigo: String(info.cnae_fiscal),
           cnae_principal_descricao: info.cnae_fiscal_descricao || 'Não informado',
           status_lead: 'Novo',
@@ -87,7 +93,7 @@ export default function VendedorTRR_Master() {
           data_captacao: new Date().toISOString()
         });
       }
-    } catch (err) { console.error("Erro no CNPJ:", cnpjLimpo); }
+    } catch (err) { console.error("Erro no processamento:", cnpjLimpo); }
   };
 
   const extrairEPesquisar = async (e) => {
@@ -104,7 +110,7 @@ export default function VendedorTRR_Master() {
       const cnpjs = textoBruto.match(/\d{14}/g) || textoBruto.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g) || [];
       const unicos = [...new Set(cnpjs)];
       for (const c of unicos) { await processarCNPJ(c, `Arquivo: ${file.name}`); }
-      setResultadoBusca(`${unicos.length} empresas processadas.`);
+      setResultadoBusca(`${unicos.length} empresas processadas com sucesso.`);
       setStatusProcesso(''); sincronizar();
     };
     file.name.endsWith('.xlsx') ? reader.readAsBinaryString(file) : reader.readAsText(file);
@@ -129,7 +135,7 @@ export default function VendedorTRR_Master() {
             {moduloAtivo === 'todo' ? (aba === 'triagem' ? 'Triagem' : 'Estoque') : 'Busca'}
           </h2>
           {moduloAtivo === 'todo' && (
-            <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className="text-[10px] bg-blue-600 text-white px-4 py-2 rounded-full font-bold active:scale-95 transition-all">
+            <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className="text-[10px] bg-blue-600/20 text-blue-400 px-4 py-2 rounded-full font-bold border border-blue-500/30">
               {mostrarFiltros ? 'FECHAR FILTROS' : 'FILTROS AVANÇADOS'}
             </button>
           )}
@@ -176,7 +182,7 @@ export default function VendedorTRR_Master() {
                 </button>
               </div>
             )}
-            <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">{leadsFiltrados.length} resultados</p>
+            <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">{leadsFiltrados.length} leads selecionados</p>
           </div>
         )}
       </header>
@@ -198,7 +204,7 @@ export default function VendedorTRR_Master() {
 
         {moduloAtivo === 'cnpj' && (
           <div className="max-w-2xl mx-auto space-y-4">
-            <textarea placeholder="Cole CNPJs aqui..." className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-32 outline-none border border-zinc-800 text-white" value={cnpjBusca} onChange={(e) => setCnpjBusca(e.target.value)} />
+            <textarea placeholder="Cole CNPJs para processar..." className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-32 outline-none border border-zinc-800 text-white" value={cnpjBusca} onChange={(e) => setCnpjBusca(e.target.value)} />
             <button onClick={async () => {
               const lista = cnpjBusca.match(/\d{14}/g) || [];
               for (const c of lista) { await processarCNPJ(c, "Busca Manual"); }
