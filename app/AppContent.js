@@ -148,7 +148,7 @@ export default function VendedorTRR_Master() {
     setStatusProcesso(''); sincronizar();
   };
 
-  // LÓGICA ORIGINAL RECUPERADA EXATAMENTE COMO ESTAVA FUNCIONANDO ONTEM
+  // FUNÇÃO ORIGINAL RESTAURADA (COMO ESTAVA FUNCIONANDO ONTEM)
   const extrairEPesquisar = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -161,7 +161,6 @@ export default function VendedorTRR_Master() {
     reader.onload = async (evt) => {
       let textoBruto = file.name.endsWith('.xlsx') ? JSON.stringify(XLSX.utils.sheet_to_json(XLSX.read(evt.target.result, { type: 'binary' }).Sheets[XLSX.read(evt.target.result, { type: 'binary' }).SheetNames[0]])) : evt.target.result;
       
-      // REGEX ORIGINAL RESTAURADA: Sem validação extra, lendo os 14 dígitos brutos
       const cnpjs = [...new Set(textoBruto.match(/\d{14}/g) || [])];
       
       if (cnpjs.length === 0) {
@@ -173,15 +172,15 @@ export default function VendedorTRR_Master() {
       let sucesso = 0;
       let ultimoErro = '';
       for (let i = 0; i < cnpjs.length; i++) {
-        setStatusProcesso(`Processando arquivo: ${i + 1} de ${cnpjs.length}...`);
+        setStatusProcesso(`Processando: ${i + 1} de ${cnpjs.length}...`);
         const r = await processarCNPJ(cnpjs[i], {fonte_lead: `Arquivo: ${file.name}`}); 
         if(r && r.ok) sucesso++;
         else if (r && r.erro) ultimoErro = r.erro;
         await new Promise(res => setTimeout(res, 400));
       }
       setStatusProcesso('');
-      if (sucesso === 0 && ultimoErro) setErroBusca(`Erro no processamento: ${ultimoErro}`);
-      else setResultadoBusca(`Arquivo concluído: ${sucesso} empresas salvas.`);
+      if (sucesso === 0 && ultimoErro) setErroBusca(`Erro: ${ultimoErro}`);
+      else setResultadoBusca(`Concluído: ${sucesso} salvos de ${cnpjs.length} encontrados.`);
       sincronizar();
     };
     file.name.endsWith('.xlsx') ? reader.readAsBinaryString(file) : reader.readAsText(file);
@@ -290,7 +289,7 @@ export default function VendedorTRR_Master() {
         {moduloAtivo === 'cnpj' && (
           <div className="max-w-2xl mx-auto space-y-4 text-white">
             <textarea 
-              placeholder="Cole os CNPJs aqui (com ou sem pontuação)..." 
+              placeholder="Cole os CNPJs aqui..." 
               className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-40 outline-none border border-zinc-800 text-white" 
               value={cnpjBusca} 
               onChange={(e) => setCnpjBusca(e.target.value)} 
@@ -301,7 +300,7 @@ export default function VendedorTRR_Master() {
                 const matches = cnpjBusca.match(regex) || [];
                 const cnpjs = [...new Set(matches)];
                 
-                if (cnpjs.length === 0) return alert("Nenhum CNPJ detectado no texto.");
+                if (cnpjs.length === 0) return alert("Nenhum CNPJ detectado.");
                 
                 setResultadoBusca('');
                 setErroBusca('');
@@ -322,11 +321,11 @@ export default function VendedorTRR_Master() {
                 setCnpjBusca(''); 
                 
                 if (sucesso === 0 && ultimoErro) {
-                  setErroBusca(`Nenhum CNPJ salvo. Motivo: ${ultimoErro}`);
+                  setErroBusca(`Erro: ${ultimoErro}`);
                 } else if (ultimoErro) {
                   setResultadoBusca(`Salvos ${sucesso} de ${cnpjs.length}. (Falha em alguns: ${ultimoErro})`);
                 } else {
-                  setResultadoBusca(`Sucesso: ${sucesso} CNPJs processados e salvos.`);
+                  setResultadoBusca(`Sucesso: ${sucesso} CNPJs salvos.`);
                 }
                 
                 sincronizar(); 
@@ -345,3 +344,4 @@ export default function VendedorTRR_Master() {
     </div>
   );
 }
+// ====== FIM DO ARQUIVO ======
