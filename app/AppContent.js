@@ -13,8 +13,8 @@ export default function VendedorTRR_Master() {
   const [cnpjBusca, setCnpjBusca] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [statusProcesso, setStatusProcesso] = useState('');
-  const [resultadoBusca, setResultadoBusca] = useState(''); // Novo: Feedback de sucesso
-  const [erroBusca, setErroBusca] = useState(''); // Novo: Feedback de erro
+  const [resultadoBusca, setResultadoBusca] = useState('');
+  const [erroBusca, setErroBusca] = useState('');
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const [totalAbsoluto, setTotalAbsoluto] = useState(0);
 
@@ -93,7 +93,6 @@ export default function VendedorTRR_Master() {
       if (info.cnpj) {
         const descSec = info.cnaes_secundarios ? info.cnaes_secundarios.map(c => c.descricao).join(' | ') : 'Não informado';
         
-        // CORREÇÃO APLICADA AQUI: { onConflict: 'cnpj' } avisa ao banco como lidar com duplicidades
         const { error } = await supabase.from('empresas_mestre').upsert({
           ...leadExistente,
           cnpj: cnpjLimpo,
@@ -111,9 +110,7 @@ export default function VendedorTRR_Master() {
           status_lead: leadExistente.status_lead || 'Novo'
         }, { onConflict: 'cnpj' });
         
-        // Se der erro no banco, agora ele relata em vez de fingir sucesso
         if (error) return { ok: false, erro: error.message };
-        
         return { ok: true, situacao: info.descricao_situacao_cadastral };
       }
       return { ok: false, erro: "CNPJ não encontrado na Receita" };
@@ -240,15 +237,14 @@ export default function VendedorTRR_Master() {
       </header>
 
       <main className="px-4 mt-6">
-        {/* NOVOS BANNERS DE FEEDBACK (SUCESSO OU ERRO) */}
         {resultadoBusca && (
-          <div className="bg-emerald-900/30 border border-emerald-500/50 p-4 rounded-2xl mb-6 flex justify-between items-center text-emerald-400 text-xs font-bold animate-pulse">
+          <div className="bg-emerald-900/30 border border-emerald-500/50 p-4 rounded-2xl mb-6 flex justify-between items-center text-emerald-400 text-xs font-bold">
             <span>✅ {resultadoBusca}</span>
             <button onClick={() => setResultadoBusca('')} className="bg-emerald-500/20 px-3 py-1 rounded-full text-[10px]">OK</button>
           </div>
         )}
         {erroBusca && (
-          <div className="bg-red-900/30 border border-red-500/50 p-4 rounded-2xl mb-6 flex justify-between items-center text-red-400 text-xs font-bold animate-pulse">
+          <div className="bg-red-900/30 border border-red-500/50 p-4 rounded-2xl mb-6 flex justify-between items-center text-red-400 text-xs font-bold">
             <span>❌ {erroBusca}</span>
             <button onClick={() => setErroBusca('')} className="bg-red-500/20 px-3 py-1 rounded-full text-[10px]">OK</button>
           </div>
@@ -277,4 +273,65 @@ export default function VendedorTRR_Master() {
         {moduloAtivo === 'arquivo' && (
           <div className="bg-zinc-900 p-12 rounded-3xl border border-dashed border-zinc-800 text-center max-w-2xl mx-auto">
             <input type="file" onChange={extrairEPesquisar} className="text-xs mb-4 w-full text-zinc-400" />
-            {statusProcesso && <p className="mt-4 text-blue-50
+            {statusProcesso && <p className="mt-4 text-blue-500 text-[10px] animate-pulse font-bold uppercase">{statusProcesso}</p>}
+          </div>
+        )}
+        
+        {moduloAtivo === 'cnpj' && (
+          <div className="max-w-2xl mx-auto space-y-4 text-white">
+            <textarea 
+              placeholder="Cole os CNPJs aqui (com ou sem pontuação)..." 
+              className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-40 outline-none border border-zinc-800 text-white" 
+              value={cnpjBusca} 
+              onChange={(e) => setCnpjBusca(e.target.value)} 
+            />
+            <button 
+              onClick={async () => { 
+                const regex = /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{14}/g;
+                const matches = cnpjBusca.match(regex) || [];
+                const lista = [...new Set(matches)];
+                
+                if (lista.length === 0) return alert("Nenhum CNPJ detectado no texto.");
+                
+                setResultadoBusca('');
+                setErroBusca('');
+                let sucesso = 0;
+                let ultimoErro = '';
+
+                for (let i = 0; i < lista.length; i++) { 
+                  setStatusProcesso(`Processando ${i + 1} de ${lista.length}...`);
+                  const r = await processarCNPJ(lista[i], {fonte_lead: "Busca Manual"}); 
+                  if (r && r.ok) {
+                    sucesso++;
+                  } else if (r && r.erro) {
+                    ultimoErro = r.erro;
+                  }
+                  await new Promise(res => setTimeout(res, 400));
+                } 
+                setStatusProcesso(''); 
+                setCnpjBusca(''); 
+                
+                if (sucesso === 0 && ultimoErro) {
+                  setErroBusca(`Nenhum CNPJ salvo. Motivo: ${ultimoErro}`);
+                } else if (ultimoErro) {
+                  setResultadoBusca(`Salvos ${sucesso} de ${lista.length}. (Falha em alguns: ${ultimoErro})`);
+                } else {
+                  setResultadoBusca(`Sucesso: ${sucesso} CNPJs processados e salvos.`);
+                }
+                
+                sincronizar(); 
+              }} 
+              className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm text-white shadow-lg active:scale-95 transition-all"
+            >
+              PESQUISAR E SALVAR
+            </button>
+          </div>
+        )}
+      </main>
+
+      <nav className="fixed bottom-6 left-6 right-6 h-16 bg-zinc-900/90 backdrop-blur-md border border-white/10 rounded-full px-8 flex justify-around items-center z-50 shadow-2xl">
+        {['estoque', 'triagem'].map(a => <button key={a} onClick={() => setAba(a)} className={`text-[11px] font-black uppercase tracking-widest ${aba === a ? 'text-blue-500' : 'text-zinc-600'}`}>{a}</button>)}
+      </nav>
+    </div>
+  );
+}
