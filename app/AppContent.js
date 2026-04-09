@@ -22,7 +22,7 @@ export default function VendedorTRR_Master() {
     cnpj: 'Todos',
     bairro: 'Todos',
     fonte_lead: 'Todos',
-    cnae_principal: 'Todos'
+    cnae_principal_descricao: 'Todos'
   });
 
   const sincronizar = async () => {
@@ -46,7 +46,7 @@ export default function VendedorTRR_Master() {
       const matchCNPJ = filtrosAtivos.cnpj === 'Todos' || lead.cnpj === filtrosAtivos.cnpj;
       const matchBairro = filtrosAtivos.bairro === 'Todos' || lead.bairro === filtrosAtivos.bairro;
       const matchFonte = filtrosAtivos.fonte_lead === 'Todos' || lead.fonte_lead === filtrosAtivos.fonte_lead;
-      const matchCnae = filtrosAtivos.cnae_principal === 'Todos' || lead.cnae_principal === filtrosAtivos.cnae_principal;
+      const matchCnae = filtrosAtivos.cnae_principal_descricao === 'Todos' || lead.cnae_principal_descricao === filtrosAtivos.cnae_principal_descricao;
       
       const texto = buscaGlobal.toLowerCase();
       const matchBusca = !buscaGlobal || 
@@ -65,14 +65,11 @@ export default function VendedorTRR_Master() {
     const cnpjLimpo = cnpj.replace(/\D/g, '');
     if (cnpjLimpo.length !== 14) return;
     try {
-      setStatusProcesso(`Buscando Receita: ${cnpjLimpo}...`);
+      setStatusProcesso(`Consultando Receita: ${cnpjLimpo}...`);
       const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
       const info = await res.json();
       
       if (info.cnpj) {
-        // Usando cnae_fiscal_descricao para garantir que o texto da atividade apareça
-        const atividade = info.cnae_fiscal_descricao || info.cnae_fiscal || 'Não informado';
-        
         await supabase.from('empresas_mestre').upsert({
           cnpj: cnpjLimpo,
           razao_social: info.razao_social,
@@ -82,13 +79,15 @@ export default function VendedorTRR_Master() {
           bairro: info.bairro,
           municipio: info.municipio,
           uf: info.uf,
-          cnae_principal: atividade,
+          // Ajustado para bater com as colunas reais do seu Supabase:
+          cnae_principal_codigo: String(info.cnae_fiscal),
+          cnae_principal_descricao: info.cnae_fiscal_descricao || 'Não informado',
           status_lead: 'Novo',
           fonte_lead: fonteInfo,
           data_captacao: new Date().toISOString()
         });
       }
-    } catch (err) { console.error("Erro na busca:", cnpjLimpo); }
+    } catch (err) { console.error("Erro no CNPJ:", cnpjLimpo); }
   };
 
   const extrairEPesquisar = async (e) => {
@@ -105,7 +104,7 @@ export default function VendedorTRR_Master() {
       const cnpjs = textoBruto.match(/\d{14}/g) || textoBruto.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g) || [];
       const unicos = [...new Set(cnpjs)];
       for (const c of unicos) { await processarCNPJ(c, `Arquivo: ${file.name}`); }
-      setResultadoBusca(`${unicos.length} CNPJs processados com sucesso.`);
+      setResultadoBusca(`${unicos.length} empresas processadas.`);
       setStatusProcesso(''); sincronizar();
     };
     file.name.endsWith('.xlsx') ? reader.readAsBinaryString(file) : reader.readAsText(file);
@@ -115,7 +114,7 @@ export default function VendedorTRR_Master() {
     <div className="min-h-screen bg-black text-white pb-40 font-sans antialiased">
       <header className="px-5 pt-8 pb-4 sticky top-0 bg-black/95 border-b border-white/5 z-50">
         <div className="flex justify-between items-center mb-2">
-          <h1 className="text-[10px] font-black text-blue-500 uppercase italic tracking-widest">TRR Intelligence</h1>
+          <h1 className="text-[10px] font-black text-blue-500 uppercase italic tracking-widest text-white">TRR Intelligence</h1>
           <div className="flex gap-3">
             {['todo', 'arquivo', 'cnpj'].map(m => (
               <button key={m} onClick={() => setModuloAtivo(m)} className={`text-[9px] font-bold uppercase ${moduloAtivo === m ? 'text-white border-b-2 border-blue-500 pb-1' : 'text-zinc-600'}`}>
@@ -126,11 +125,11 @@ export default function VendedorTRR_Master() {
         </div>
         
         <div className="flex justify-between items-center">
-          <h2 className="text-3xl font-black italic uppercase tracking-tighter">
+          <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">
             {moduloAtivo === 'todo' ? (aba === 'triagem' ? 'Triagem' : 'Estoque') : 'Busca'}
           </h2>
           {moduloAtivo === 'todo' && (
-            <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className="text-[10px] bg-blue-600/20 text-blue-400 px-4 py-2 rounded-full font-bold border border-blue-500/30">
+            <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className="text-[10px] bg-blue-600 text-white px-4 py-2 rounded-full font-bold active:scale-95 transition-all">
               {mostrarFiltros ? 'FECHAR FILTROS' : 'FILTROS AVANÇADOS'}
             </button>
           )}
@@ -154,7 +153,7 @@ export default function VendedorTRR_Master() {
                   { label: 'CNPJ', campo: 'cnpj' },
                   { label: 'Bairro', campo: 'bairro' },
                   { label: 'Fonte', campo: 'fonte_lead' },
-                  { label: 'CNAE (Atividade)', campo: 'cnae_principal' }
+                  { label: 'CNAE (Descrição)', campo: 'cnae_principal_descricao' }
                 ].map(filtro => (
                   <div key={filtro.campo} className="flex flex-col gap-1">
                     <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">{filtro.label}</label>
@@ -170,7 +169,7 @@ export default function VendedorTRR_Master() {
                   </div>
                 ))}
                 <button 
-                  onClick={() => setFiltrosAtivos({razao_social:'Todos', nome_fantasia:'Todos', cnpj:'Todos', bairro:'Todos', fonte_lead:'Todos', cnae_principal:'Todos'})}
+                  onClick={() => setFiltrosAtivos({razao_social:'Todos', nome_fantasia:'Todos', cnpj:'Todos', bairro:'Todos', fonte_lead:'Todos', cnae_principal_descricao:'Todos'})}
                   className="lg:col-span-3 mt-2 text-[9px] font-bold text-red-500 uppercase py-3 bg-red-500/10 rounded-lg"
                 >
                   Limpar Todos os Filtros
@@ -204,14 +203,14 @@ export default function VendedorTRR_Master() {
               const lista = cnpjBusca.match(/\d{14}/g) || [];
               for (const c of lista) { await processarCNPJ(c, "Busca Manual"); }
               setCnpjBusca(''); sincronizar();
-            }} className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm">Pesquisar e Salvar</button>
+            }} className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm text-white">Pesquisar e Salvar</button>
           </div>
         )}
 
         {moduloAtivo === 'todo' && (
           <div className="bg-zinc-900/30 border border-white/5 rounded-2xl divide-y divide-zinc-800/50">
             {carregando ? (
-              <div className="text-center py-20 text-[10px] animate-pulse tracking-[0.3em]">CARREGANDO DADOS...</div>
+              <div className="text-center py-20 text-[10px] animate-pulse tracking-[0.3em] text-white">SINCRONIZANDO...</div>
             ) : (
               leadsFiltrados.map(lead => (
                 <div key={lead.cnpj} className="py-4 px-4 flex justify-between items-center gap-3 hover:bg-zinc-800/40 transition-colors">
@@ -222,7 +221,7 @@ export default function VendedorTRR_Master() {
                       <span className="text-[8px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 font-bold uppercase border border-white/5">{lead.bairro}</span>
                       <span className="text-[8px] bg-blue-900/20 px-2 py-0.5 rounded text-blue-400 font-bold uppercase border border-blue-500/10">{lead.cnpj}</span>
                       <span className="text-[8px] bg-orange-900/20 px-2 py-0.5 rounded text-orange-400 font-bold border border-orange-500/10">
-                        CNAE: {lead.cnae_principal || 'Não capturado'}
+                        CNAE: {lead.cnae_principal_descricao || lead.cnae_principal_codigo || 'Não Capturado'}
                       </span>
                     </div>
                   </div>
@@ -231,7 +230,7 @@ export default function VendedorTRR_Master() {
                       const n = aba === 'estoque' ? 'Triagem' : 'Em Prospecção';
                       await supabase.from('empresas_mestre').update({status_lead: n}).eq('cnpj', lead.cnpj); 
                       sincronizar(); 
-                    }} className={`h-10 w-12 rounded-xl flex items-center justify-center text-sm ${aba === 'estoque' ? 'bg-blue-600' : 'bg-orange-600'}`}>
+                    }} className={`h-10 w-12 rounded-xl flex items-center justify-center text-sm ${aba === 'estoque' ? 'bg-blue-600' : 'bg-orange-600'} text-white`}>
                       ➡️
                     </button>
                   </div>
@@ -242,7 +241,7 @@ export default function VendedorTRR_Master() {
         )}
       </main>
 
-      <nav className="fixed bottom-6 left-6 right-6 h-16 bg-zinc-900/90 backdrop-blur-md border border-white/10 rounded-full px-8 flex justify-around items-center z-50">
+      <nav className="fixed bottom-6 left-6 right-6 h-16 bg-zinc-900/90 backdrop-blur-md border border-white/10 rounded-full px-8 flex justify-around items-center z-50 shadow-2xl">
         {['estoque', 'triagem'].map(a => (
           <button key={a} onClick={() => setAba(a)} className={`text-[11px] font-black uppercase tracking-widest ${aba === a ? 'text-blue-500' : 'text-zinc-600'}`}>{a}</button>
         ))}
