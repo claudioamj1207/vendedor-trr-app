@@ -14,6 +14,7 @@ export default function VendedorTRR_Master() {
   const [carregando, setCarregando] = useState(true);
   const [statusProcesso, setStatusProcesso] = useState('');
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
+  const [totalReal, setTotalReal] = useState(0); // Estado para o contador real
 
   const [filtrosAtivos, setFiltrosAtivos] = useState({
     razao_social: 'Todos',
@@ -28,14 +29,16 @@ export default function VendedorTRR_Master() {
   const sincronizar = async () => {
     try {
       setCarregando(true);
-      // Aumentado o range para 10.000 para ler toda a base de Manaus
-      const { data } = await supabase
+      // Busca com contagem exata e range estendido para quebrar a barreira de 1000
+      const { data, count } = await supabase
         .from('empresas_mestre')
-        .select('*') 
+        .select('*', { count: 'exact' }) 
         .eq('status_lead', aba === 'estoque' ? 'Novo' : 'Triagem')
         .order('razao_social', { ascending: true })
-        .range(0, 10000);
+        .range(0, 5000); 
+        
       setLeads(data || []);
+      setTotalReal(count || (data ? data.length : 0));
     } finally { setCarregando(false); }
   };
 
@@ -91,7 +94,7 @@ export default function VendedorTRR_Master() {
   };
 
   const limparInativos = async () => {
-    if (!confirm(`O sistema irá checar os ${leadsFiltrados.length} leads filtrados e excluir CNPJs baixados ou inativos. Confirmar?`)) return;
+    if (!confirm(`O sistema irá checar os ${leadsFiltrados.length} leads filtrados e excluir inativos. Confirmar?`)) return;
     let excluidos = 0;
     for (const lead of leadsFiltrados) {
       setStatusProcesso(`Checando: ${lead.razao_social}`);
@@ -103,7 +106,7 @@ export default function VendedorTRR_Master() {
       await new Promise(r => setTimeout(r, 450));
     }
     setStatusProcesso('');
-    alert(`Limpeza concluída! ${excluidos} empresas inativas foram removidas.`);
+    alert(`Limpeza concluída! ${excluidos} empresas removidas.`);
     sincronizar();
   };
 
@@ -182,19 +185,22 @@ export default function VendedorTRR_Master() {
                 ))}
               </div>
             )}
-            <div className="flex justify-between items-center"><p className="text-[9px] text-zinc-500 font-bold uppercase">{leadsFiltrados.length} Leads Carregados</p>{statusProcesso && <p className="text-[9px] text-blue-500 animate-pulse font-black uppercase italic">{statusProcesso}</p>}</div>
+            <div className="flex justify-between items-center">
+              <p className="text-[9px] text-zinc-500 font-bold uppercase">
+                {leadsFiltrados.length} Filtrados de {totalReal} Total
+              </p>
+              {statusProcesso && <p className="text-[9px] text-blue-500 animate-pulse font-black uppercase italic">{statusProcesso}</p>}
+            </div>
           </div>
         )}
       </header>
 
       <main className="px-4 mt-6">
-        {moduloAtivo === 'arquivo' && <div className="bg-zinc-900 p-12 rounded-3xl border border-dashed border-zinc-800 text-center max-w-2xl mx-auto"><input type="file" onChange={extrairEPesquisar} className="text-xs mb-4 w-full text-zinc-400" /></div>}
-        {moduloAtivo === 'cnpj' && <div className="max-w-2xl mx-auto space-y-4"><textarea placeholder="Cole CNPJs..." className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-40 outline-none border border-zinc-800 text-white" value={cnpjBusca} onChange={(e) => setCnpjBusca(e.target.value)} /><button onClick={async () => { const lista = cnpjBusca.match(/\d{14}/g) || []; for (const c of lista) { await processarCNPJ(c, {fonte_lead: "Busca Manual"}); } setCnpjBusca(''); sincronizar(); }} className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm text-white">PESQUISAR E SALVAR</button></div>}
         {moduloAtivo === 'todo' && (
           <div className="bg-zinc-900/30 border border-white/5 rounded-2xl divide-y divide-zinc-800/50">
             {carregando ? <div className="text-center py-20 text-[10px] animate-pulse text-zinc-600 font-black uppercase">Sincronizando...</div> :
             leadsFiltrados.map(lead => (
-              <div key={lead.cnpj} className="py-4 px-4 flex justify-between items-center gap-3 hover:bg-zinc-800/40 transition-colors">
+              <div key={lead.cnpj} className="py-4 px-4 flex justify-between items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <h3 className="text-[12px] font-bold uppercase truncate text-white leading-tight">{lead.razao_social}</h3>
                   <div className="flex gap-2 mt-2 flex-wrap">
@@ -204,11 +210,13 @@ export default function VendedorTRR_Master() {
                     {lead.cnae_secundario && <span className="text-[8px] bg-zinc-900/50 px-2 py-0.5 rounded text-zinc-500 font-medium truncate max-w-[200px] italic">Sec: {lead.cnae_secundario}</span>}
                   </div>
                 </div>
-                <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: aba === 'estoque' ? 'Triagem' : 'Em Prospecção'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center text-white active:scale-95 transition-all">➡️</button>
+                <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: aba === 'estoque' ? 'Triagem' : 'Em Prospecção'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center text-white">➡️</button>
               </div>
             ))}
           </div>
         )}
+        {moduloAtivo === 'arquivo' && <div className="bg-zinc-900 p-12 rounded-3xl border border-dashed border-zinc-800 text-center max-w-2xl mx-auto"><input type="file" onChange={extrairEPesquisar} className="text-xs mb-4 w-full text-zinc-400" /></div>}
+        {moduloAtivo === 'cnpj' && <div className="max-w-2xl mx-auto space-y-4"><textarea placeholder="Cole CNPJs..." className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-40 outline-none border border-zinc-800 text-white" value={cnpjBusca} onChange={(e) => setCnpjBusca(e.target.value)} /><button onClick={async () => { const lista = cnpjBusca.match(/\d{14}/g) || []; for (const c of lista) { await processarCNPJ(c, {fonte_lead: "Busca Manual"}); } setCnpjBusca(''); sincronizar(); }} className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm text-white">PESQUISAR E SALVAR</button></div>}
       </main>
       <nav className="fixed bottom-6 left-6 right-6 h-16 bg-zinc-900/90 backdrop-blur-md border border-white/10 rounded-full px-8 flex justify-around items-center z-50">
         {['estoque', 'triagem'].map(a => <button key={a} onClick={() => setAba(a)} className={`text-[11px] font-black uppercase tracking-widest ${aba === a ? 'text-blue-500' : 'text-zinc-600'}`}>{a}</button>)}
