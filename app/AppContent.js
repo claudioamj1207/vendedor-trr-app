@@ -16,7 +16,6 @@ export default function VendedorTRR_Master() {
   const [resultadoBusca, setResultadoBusca] = useState('');
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
 
-  // Estados dos Filtros (Estilo Excel - Múltiplas Escolhas)
   const [filtrosAtivos, setFiltrosAtivos] = useState({
     razao_social: 'Todos',
     nome_fantasia: 'Todos',
@@ -38,7 +37,6 @@ export default function VendedorTRR_Master() {
     } finally { setCarregando(false); }
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { sincronizar(); }, [aba, moduloAtivo]);
 
   const leadsFiltrados = useMemo(() => {
@@ -67,12 +65,10 @@ export default function VendedorTRR_Master() {
     const cnpjLimpo = cnpj.replace(/\D/g, '');
     if (cnpjLimpo.length !== 14) return;
     try {
-      setStatusProcesso(`Consultando Receita: ${cnpjLimpo}...`);
       const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
       const info = await res.json();
       
       if (info.cnpj) {
-        // Mapeamento exato baseado na imagem do seu banco de dados
         await supabase.from('empresas_mestre').upsert({
           cnpj: cnpjLimpo,
           razao_social: info.razao_social,
@@ -82,18 +78,33 @@ export default function VendedorTRR_Master() {
           bairro: info.bairro,
           municipio: info.municipio,
           uf: info.uf,
-          cep: info.cep,
-          email: info.email,
-          telefone: info.ddd_telefone_1,
-          // NOMES DAS COLUNAS AJUSTADOS PARA O SEU SUPABASE:
           cnae_principal_codigo: String(info.cnae_fiscal),
           cnae_principal_descricao: info.cnae_fiscal_descricao || 'Não informado',
-          status_lead: 'Novo',
-          fonte_lead: fonteInfo,
-          data_captacao: new Date().toISOString()
+          status_lead: info.status_lead || 'Novo',
+          fonte_lead: info.fonte_lead || fonteInfo,
+          data_captacao: info.data_captacao || new Date().toISOString()
         });
       }
-    } catch (err) { console.error("Erro no processamento:", cnpjLimpo); }
+    } catch (err) { console.error("Erro no CNPJ:", cnpjLimpo); }
+  };
+
+  // NOVA FUNÇÃO: RE-PROCESSAR TUDO PARA PEGAR CNAES
+  const atualizarCNAEsEmMassa = async () => {
+    if (!confirm(`Deseja atualizar as descrições de CNAE para os ${leadsFiltrados.length} leads filtrados?`)) return;
+    
+    setResultadoBusca('');
+    let cont = 0;
+    for (const lead of leadsFiltrados) {
+      cont++;
+      setStatusProcesso(`Atualizando CNAE ${cont} de ${leadsFiltrados.length}: ${lead.razao_social}`);
+      await processarCNPJ(lead.cnpj, lead.fonte_lead || 'Atualização em Massa');
+      // Pequena pausa para evitar bloqueio da API
+      await new Promise(r => setTimeout(r, 500));
+    }
+    
+    setStatusProcesso('');
+    setResultadoBusca(`Sucesso! ${cont} leads foram atualizados com as descrições da Receita.`);
+    sincronizar();
   };
 
   const extrairEPesquisar = async (e) => {
@@ -109,8 +120,11 @@ export default function VendedorTRR_Master() {
       } else { textoBruto = evt.target.result; }
       const cnpjs = textoBruto.match(/\d{14}/g) || textoBruto.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g) || [];
       const unicos = [...new Set(cnpjs)];
-      for (const c of unicos) { await processarCNPJ(c, `Arquivo: ${file.name}`); }
-      setResultadoBusca(`${unicos.length} empresas processadas com sucesso.`);
+      for (const c of unicos) { 
+        setStatusProcesso(`Processando ${unicos.indexOf(c) + 1} de ${unicos.length}...`);
+        await processarCNPJ(c, `Arquivo: ${file.name}`); 
+      }
+      setResultadoBusca(`${unicos.length} empresas processadas.`);
       setStatusProcesso(''); sincronizar();
     };
     file.name.endsWith('.xlsx') ? reader.readAsBinaryString(file) : reader.readAsText(file);
@@ -120,7 +134,7 @@ export default function VendedorTRR_Master() {
     <div className="min-h-screen bg-black text-white pb-40 font-sans antialiased">
       <header className="px-5 pt-8 pb-4 sticky top-0 bg-black/95 border-b border-white/5 z-50">
         <div className="flex justify-between items-center mb-2">
-          <h1 className="text-[10px] font-black text-blue-500 uppercase italic tracking-widest text-white">TRR Intelligence</h1>
+          <h1 className="text-[10px] font-black text-blue-500 uppercase italic tracking-widest">TRR Intelligence</h1>
           <div className="flex gap-3">
             {['todo', 'arquivo', 'cnpj'].map(m => (
               <button key={m} onClick={() => setModuloAtivo(m)} className={`text-[9px] font-bold uppercase ${moduloAtivo === m ? 'text-white border-b-2 border-blue-500 pb-1' : 'text-zinc-600'}`}>
@@ -131,14 +145,24 @@ export default function VendedorTRR_Master() {
         </div>
         
         <div className="flex justify-between items-center">
-          <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">
+          <h2 className="text-3xl font-black italic uppercase tracking-tighter">
             {moduloAtivo === 'todo' ? (aba === 'triagem' ? 'Triagem' : 'Estoque') : 'Busca'}
           </h2>
-          {moduloAtivo === 'todo' && (
-            <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className="text-[10px] bg-blue-600/20 text-blue-400 px-4 py-2 rounded-full font-bold border border-blue-500/30">
-              {mostrarFiltros ? 'FECHAR FILTROS' : 'FILTROS AVANÇADOS'}
-            </button>
-          )}
+          <div className="flex gap-2">
+            {moduloAtivo === 'todo' && leadsFiltrados.length > 0 && (
+              <button 
+                onClick={atualizarCNAEsEmMassa}
+                className="text-[10px] bg-emerald-600 text-white px-4 py-2 rounded-full font-bold hover:bg-emerald-500 transition-all"
+              >
+                🔄 ATUALIZAR CNAEs
+              </button>
+            )}
+            {moduloAtivo === 'todo' && (
+              <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className="text-[10px] bg-blue-600/20 text-blue-400 px-4 py-2 rounded-full font-bold border border-blue-500/30">
+                {mostrarFiltros ? 'FECHAR FILTROS' : 'FILTROS AVANÇADOS'}
+              </button>
+            )}
+          </div>
         </div>
 
         {moduloAtivo === 'todo' && (
@@ -182,7 +206,10 @@ export default function VendedorTRR_Master() {
                 </button>
               </div>
             )}
-            <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">{leadsFiltrados.length} leads selecionados</p>
+            <div className="flex justify-between items-center">
+              <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">{leadsFiltrados.length} leads selecionados</p>
+              {statusProcesso && <p className="text-[9px] text-blue-500 animate-pulse font-black uppercase italic">{statusProcesso}</p>}
+            </div>
           </div>
         )}
       </header>
@@ -207,8 +234,11 @@ export default function VendedorTRR_Master() {
             <textarea placeholder="Cole CNPJs para processar..." className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-32 outline-none border border-zinc-800 text-white" value={cnpjBusca} onChange={(e) => setCnpjBusca(e.target.value)} />
             <button onClick={async () => {
               const lista = cnpjBusca.match(/\d{14}/g) || [];
-              for (const c of lista) { await processarCNPJ(c, "Busca Manual"); }
-              setCnpjBusca(''); sincronizar();
+              for (const c of lista) { 
+                setStatusProcesso(`Processando ${lista.indexOf(c) + 1} de ${lista.length}...`);
+                await processarCNPJ(c, "Busca Manual"); 
+              }
+              setStatusProcesso(''); setCnpjBusca(''); sincronizar();
             }} className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm text-white">Pesquisar e Salvar</button>
           </div>
         )}
