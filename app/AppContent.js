@@ -5,35 +5,6 @@ import * as XLSX from 'xlsx';
 
 const supabase = createClient("https://qswmodzcsdkjmdzgxtlo.supabase.co", "sb_publishable_lWTV-2xQxwJlIAEn-zj_vg_z75OgB4k");
 
-// Validador Matemático de CNPJ para ignorar lixo binário de PDFs
-function validarCNPJ(cnpj) {
-  cnpj = cnpj.replace(/[^\d]+/g, '');
-  if (cnpj.length !== 14) return false;
-  if (/^(\d)\1+$/.test(cnpj)) return false;
-  let tamanho = cnpj.length - 2;
-  let numeros = cnpj.substring(0, tamanho);
-  let digitos = cnpj.substring(tamanho);
-  let soma = 0;
-  let pos = tamanho - 7;
-  for (let i = tamanho; i >= 1; i--) {
-    soma += numeros.charAt(tamanho - i) * pos--;
-    if (pos < 2) pos = 9;
-  }
-  let resultado = soma % 11 < 2 ? 0 : 11 - soma % 11;
-  if (resultado != digitos.charAt(0)) return false;
-  tamanho = tamanho + 1;
-  numeros = cnpj.substring(0, tamanho);
-  soma = 0;
-  pos = tamanho - 7;
-  for (let i = tamanho; i >= 1; i--) {
-    soma += numeros.charAt(tamanho - i) * pos--;
-    if (pos < 2) pos = 9;
-  }
-  resultado = soma % 11 < 2 ? 0 : 11 - soma % 11;
-  if (resultado != digitos.charAt(1)) return false;
-  return true;
-}
-
 export default function VendedorTRR_Master() {
   const [leads, setLeads] = useState([]);
   const [aba, setAba] = useState('estoque'); 
@@ -115,7 +86,7 @@ export default function VendedorTRR_Master() {
 
   const processarCNPJ = async (cnpj, leadExistente = {}) => {
     const cnpjLimpo = cnpj.replace(/\D/g, '');
-    if (cnpjLimpo.length !== 14 || !validarCNPJ(cnpjLimpo)) return { ok: false, erro: "CNPJ Inválido" };
+    if (cnpjLimpo.length !== 14) return { ok: false, erro: "CNPJ Inválido" };
     try {
       const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
       const info = await res.json();
@@ -177,40 +148,40 @@ export default function VendedorTRR_Master() {
     setStatusProcesso(''); sincronizar();
   };
 
+  // LÓGICA ORIGINAL RECUPERADA EXATAMENTE COMO ESTAVA FUNCIONANDO ONTEM
   const extrairEPesquisar = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    
     setResultadoBusca('');
     setErroBusca('');
     setStatusProcesso('Lendo arquivo...');
+    
     const reader = new FileReader();
     reader.onload = async (evt) => {
       let textoBruto = file.name.endsWith('.xlsx') ? JSON.stringify(XLSX.utils.sheet_to_json(XLSX.read(evt.target.result, { type: 'binary' }).Sheets[XLSX.read(evt.target.result, { type: 'binary' }).SheetNames[0]])) : evt.target.result;
       
-      // Regex aprimorada para capturar CNPJs formatados, não formatados e os com vírgula no lugar de ponto
-      const cnpjsRegex = /\d{2}[\.,]?\d{3}[\.,]?\d{3}\/?\d{4}-?\d{2}|\d{14}/g;
-      const cnpjs = [...new Set(textoBruto.match(cnpjsRegex) || [])];
+      // REGEX ORIGINAL RESTAURADA: Sem validação extra, lendo os 14 dígitos brutos
+      const cnpjs = [...new Set(textoBruto.match(/\d{14}/g) || [])];
       
-      // Filtra os válidos usando a matemática oficial para ignorar lixo de PDF
-      const cnpjsValidos = cnpjs.filter(c => validarCNPJ(c.replace(/\D/g, '')));
-      
-      if (cnpjsValidos.length === 0) {
+      if (cnpjs.length === 0) {
         setStatusProcesso('');
-        return setErroBusca("Nenhum CNPJ válido encontrado no arquivo.");
+        setErroBusca("Nenhum CNPJ com 14 dígitos encontrado no arquivo.");
+        return;
       }
 
       let sucesso = 0;
       let ultimoErro = '';
-      for (let i = 0; i < cnpjsValidos.length; i++) {
-        setStatusProcesso(`Capturando arquivo: ${i + 1} de ${cnpjsValidos.length}...`);
-        const r = await processarCNPJ(cnpjsValidos[i], {fonte_lead: `Arquivo: ${file.name}`}); 
+      for (let i = 0; i < cnpjs.length; i++) {
+        setStatusProcesso(`Processando arquivo: ${i + 1} de ${cnpjs.length}...`);
+        const r = await processarCNPJ(cnpjs[i], {fonte_lead: `Arquivo: ${file.name}`}); 
         if(r && r.ok) sucesso++;
         else if (r && r.erro) ultimoErro = r.erro;
         await new Promise(res => setTimeout(res, 400));
       }
       setStatusProcesso('');
-      if (sucesso === 0 && ultimoErro) setErroBusca(`Erro no arquivo: ${ultimoErro}`);
-      else setResultadoBusca(`Arquivo: ${sucesso} de ${cnpjsValidos.length} empresas válidas salvas.`);
+      if (sucesso === 0 && ultimoErro) setErroBusca(`Erro no processamento: ${ultimoErro}`);
+      else setResultadoBusca(`Arquivo concluído: ${sucesso} empresas salvas.`);
       sincronizar();
     };
     file.name.endsWith('.xlsx') ? reader.readAsBinaryString(file) : reader.readAsText(file);
@@ -329,18 +300,17 @@ export default function VendedorTRR_Master() {
                 const regex = /\d{2}[\.,]?\d{3}[\.,]?\d{3}\/?\d{4}-?\d{2}|\d{14}/g;
                 const matches = cnpjBusca.match(regex) || [];
                 const cnpjs = [...new Set(matches)];
-                const cnpjsValidos = cnpjs.filter(c => validarCNPJ(c.replace(/\D/g, '')));
                 
-                if (cnpjsValidos.length === 0) return alert("Nenhum CNPJ válido detectado no texto.");
+                if (cnpjs.length === 0) return alert("Nenhum CNPJ detectado no texto.");
                 
                 setResultadoBusca('');
                 setErroBusca('');
                 let sucesso = 0;
                 let ultimoErro = '';
 
-                for (let i = 0; i < cnpjsValidos.length; i++) { 
-                  setStatusProcesso(`Processando ${i + 1} de ${cnpjsValidos.length}...`);
-                  const r = await processarCNPJ(cnpjsValidos[i], {fonte_lead: "Busca Manual"}); 
+                for (let i = 0; i < cnpjs.length; i++) { 
+                  setStatusProcesso(`Processando ${i + 1} de ${cnpjs.length}...`);
+                  const r = await processarCNPJ(cnpjs[i], {fonte_lead: "Busca Manual"}); 
                   if (r && r.ok) {
                     sucesso++;
                   } else if (r && r.erro) {
@@ -354,7 +324,7 @@ export default function VendedorTRR_Master() {
                 if (sucesso === 0 && ultimoErro) {
                   setErroBusca(`Nenhum CNPJ salvo. Motivo: ${ultimoErro}`);
                 } else if (ultimoErro) {
-                  setResultadoBusca(`Salvos ${sucesso} de ${cnpjsValidos.length}. (Falha em alguns: ${ultimoErro})`);
+                  setResultadoBusca(`Salvos ${sucesso} de ${cnpjs.length}. (Falha em alguns: ${ultimoErro})`);
                 } else {
                   setResultadoBusca(`Sucesso: ${sucesso} CNPJs processados e salvos.`);
                 }
