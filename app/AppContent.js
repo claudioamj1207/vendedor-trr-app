@@ -16,25 +16,23 @@ export default function VendedorTRR_Master() {
   const [resultadoBusca, setResultadoBusca] = useState('');
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
 
-  // Estados dos Filtros Específicos
-  const [filtroBairro, setFiltroBairro] = useState('Todos');
-  const [filtroFonte, setFiltroFonte] = useState('Todos');
-  const [filtroData, setFiltroData] = useState('Todos');
+  // Estados dos Filtros Dinâmicos (Estilo Excel)
+  const [filtrosAtivos, setFiltrosAtivos] = useState({
+    bairro: 'Todos',
+    fonte_lead: 'Todos',
+    cnae_principal: 'Todos',
+    municipio: 'Todos',
+    data_captacao: 'Todos'
+  });
 
   const sincronizar = async () => {
     try {
       setCarregando(true);
-      // Puxamos mais campos para permitir o filtro total
-      let query = supabase.from('empresas_mestre').select('*');
-      
-      if (moduloAtivo === 'todo') {
-        if (aba === 'estoque') query = query.eq('status_lead', 'Novo');
-        if (aba === 'triagem') query = query.eq('status_lead', 'Triagem');
-      } else if (moduloAtivo === 'cnpj' && cnpjBusca) {
-        query = query.eq('cnpj', cnpjBusca.replace(/\D/g, ''));
-      }
-      
-      const { data } = await query.order('razao_social', { ascending: true });
+      const { data } = await supabase
+        .from('empresas_mestre')
+        .select('*')
+        .eq('status_lead', aba === 'estoque' ? 'Novo' : 'Triagem')
+        .order('razao_social', { ascending: true });
       setLeads(data || []);
     } finally { setCarregando(false); }
   };
@@ -42,35 +40,32 @@ export default function VendedorTRR_Master() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { sincronizar(); }, [aba, moduloAtivo]);
 
-  // Lógica de Filtro em cascata (Amplitude Total)
+  // Lógica de Filtro Multivariável Estilo Excel
   const leadsFiltrados = useMemo(() => {
     return leads.filter(lead => {
-      const matchBairro = filtroBairro === 'Todos' || lead.bairro === filtroBairro;
-      const matchFonte = filtroFonte === 'Todos' || lead.fonte_lead === filtroFonte;
+      const matchBairro = filtrosAtivos.bairro === 'Todos' || lead.bairro === filtrosAtivos.bairro;
+      const matchFonte = filtrosAtivos.fonte_lead === 'Todos' || lead.fonte_lead === filtrosAtivos.fonte_lead;
+      const matchCnae = filtrosAtivos.cnae_principal === 'Todos' || lead.cnae_principal === filtrosAtivos.cnae_principal;
+      const matchMuni = filtrosAtivos.municipio === 'Todos' || lead.municipio === filtrosAtivos.municipio;
       
-      // Filtro de Data simplificado
       let matchData = true;
-      if (filtroData === 'Hoje') {
+      if (filtrosAtivos.data_captacao === 'Hoje') {
         matchData = lead.data_captacao?.startsWith(new Date().toISOString().split('T')[0]);
       }
 
-      // Busca Global em todos os campos
-      const textoBusca = buscaGlobal.toLowerCase();
+      const texto = buscaGlobal.toLowerCase();
       const matchBusca = !buscaGlobal || 
-        lead.razao_social?.toLowerCase().includes(textoBusca) ||
-        lead.nome_fantasia?.toLowerCase().includes(textoBusca) ||
-        lead.cnpj?.includes(textoBusca) ||
-        lead.bairro?.toLowerCase().includes(textoBusca) ||
-        lead.cnae_principal?.toLowerCase().includes(textoBusca) ||
-        lead.logradouro?.toLowerCase().includes(textoBusca);
+        Object.values(lead).some(val => String(val).toLowerCase().includes(texto));
 
-      return matchBairro && matchFonte && matchData && matchBusca;
+      return matchBairro && matchFonte && matchCnae && matchMuni && matchData && matchBusca;
     });
-  }, [leads, filtroBairro, filtroFonte, filtroData, buscaGlobal]);
+  }, [leads, filtrosAtivos, buscaGlobal]);
 
-  // Listas dinâmicas para os seletores de filtro
-  const bairrosUnicos = ['Todos', ...new Set(leads.map(l => l.bairro).filter(Boolean))].sort();
-  const fontesUnicas = ['Todos', ...new Set(leads.map(l => l.fonte_lead).filter(Boolean))].sort();
+  // Gerador de Opções Únicas para os Filtros (O que aparece no "dropdown" do Excel)
+  const obterOpcoes = (campo) => {
+    const opcoes = [...new Set(leads.map(l => l[campo]).filter(Boolean))].sort();
+    return ['Todos', ...opcoes];
+  };
 
   const processarCNPJ = async (cnpj, fonteInfo) => {
     const cnpjLimpo = cnpj.replace(/\D/g, '');
@@ -105,8 +100,7 @@ export default function VendedorTRR_Master() {
   const extrairEPesquisar = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setResultadoBusca('');
-    setStatusProcesso('Lendo arquivo...');
+    setResultadoBusca(''); setStatusProcesso('Lendo arquivo...');
     const reader = new FileReader();
     reader.onload = async (evt) => {
       let textoBruto = "";
@@ -114,12 +108,11 @@ export default function VendedorTRR_Master() {
         const wb = XLSX.read(evt.target.result, { type: 'binary' });
         textoBruto = JSON.stringify(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]));
       } else { textoBruto = evt.target.result; }
-      const cnpjsEncontrados = textoBruto.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g) || textoBruto.match(/\d{14}/g) || [];
-      const cnpjsUnicos = [...new Set(cnpjsEncontrados)];
-      for (const cnpj of cnpjsUnicos) { await processarCNPJ(cnpj, `Arquivo: ${file.name}`); }
-      setResultadoBusca(`Processados ${cnpjsUnicos.length} CNPJs de ${file.name}`);
-      setStatusProcesso('');
-      sincronizar();
+      const cnpjs = textoBruto.match(/\d{14}/g) || textoBruto.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g) || [];
+      const unicos = [...new Set(cnpjs)];
+      for (const c of unicos) { await processarCNPJ(c, `Arquivo: ${file.name}`); }
+      setResultadoBusca(`Sucesso: ${unicos.length} CNPJs de ${file.name}`);
+      setStatusProcesso(''); sincronizar();
     };
     file.name.endsWith('.xlsx') ? reader.readAsBinaryString(file) : reader.readAsText(file);
   };
@@ -138,13 +131,13 @@ export default function VendedorTRR_Master() {
           </div>
         </div>
         
-        <div className="flex justify-between items-end">
+        <div className="flex justify-between items-center">
           <h2 className="text-3xl font-black italic uppercase tracking-tighter">
             {moduloAtivo === 'todo' ? (aba === 'triagem' ? 'Triagem' : 'Estoque') : 'Busca'}
           </h2>
           {moduloAtivo === 'todo' && (
-            <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className="text-[10px] bg-zinc-800 px-3 py-1 rounded-full font-bold border border-white/10">
-              {mostrarFiltros ? 'FECHAR FILTROS' : 'FILTROS AVANÇADOS'}
+            <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className="text-[10px] bg-blue-600/20 text-blue-400 px-4 py-2 rounded-full font-bold border border-blue-500/30 active:scale-95 transition-all">
+              {mostrarFiltros ? 'OCULTAR FILTROS' : 'FILTROS ESTILO EXCEL'}
             </button>
           )}
         </div>
@@ -153,31 +146,54 @@ export default function VendedorTRR_Master() {
           <div className="mt-4 space-y-3">
             <input 
               type="text" 
-              placeholder="Busca total (Nome, CNAE, Bairro, Rua...)" 
+              placeholder="Pesquisa rápida..." 
               className="w-full bg-zinc-900 p-3 rounded-xl text-xs outline-none border border-zinc-800 focus:border-blue-500 transition-colors"
               value={buscaGlobal}
               onChange={(e) => setBuscaGlobal(e.target.value)}
             />
             
             {mostrarFiltros && (
-              <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-2">
-                <select onChange={(e) => setFiltroBairro(e.target.value)} className="bg-zinc-800 text-[10px] p-2 rounded-lg outline-none border border-white/5">
-                  <option value="Todos">Todos os Bairros</option>
-                  {bairrosUnicos.map(b => b !== 'Todos' && <option key={b} value={b}>{b}</option>)}
-                </select>
-                <select onChange={(e) => setFiltroFonte(e.target.value)} className="bg-zinc-800 text-[10px] p-2 rounded-lg outline-none border border-white/5">
-                  <option value="Todos">Todas as Fontes</option>
-                  {fontesUnicas.map(f => f !== 'Todos' && <option key={f} value={f}>{f}</option>)}
-                </select>
-                <select onChange={(e) => setFiltroData(e.target.value)} className="bg-zinc-800 text-[10px] p-2 rounded-lg outline-none border border-white/5 col-span-2">
-                  <option value="Todos">Todo o Período</option>
-                  <option value="Hoje">Captados Hoje</option>
-                </select>
+              <div className="grid grid-cols-1 gap-2 p-3 bg-zinc-900/50 rounded-2xl border border-white/5 animate-in slide-in-from-top-4 duration-300">
+                {[
+                  { label: 'Bairro', campo: 'bairro' },
+                  { label: 'Fonte', campo: 'fonte_lead' },
+                  { label: 'CNAE', campo: 'cnae_principal' },
+                  { label: 'Cidade', campo: 'municipio' }
+                ].map(filtro => (
+                  <div key={filtro.campo} className="flex flex-col gap-1">
+                    <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">{filtro.label}</label>
+                    <select 
+                      value={filtrosAtivos[filtro.campo]}
+                      onChange={(e) => setFiltrosAtivos({...filtrosAtivos, [filtro.campo]: e.target.value})}
+                      className="bg-zinc-800 text-[11px] p-2.5 rounded-lg outline-none border border-white/5 appearance-none"
+                    >
+                      {obterOpcoes(filtro.campo).map(opt => (
+                        <option key={opt} value={opt}>{opt === 'Todos' ? `Todos (${filtro.label}s)` : opt}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">Data</label>
+                  <select 
+                    onChange={(e) => setFiltrosAtivos({...filtrosAtivos, data_captacao: e.target.value})}
+                    className="bg-zinc-800 text-[11px] p-2.5 rounded-lg border border-white/5"
+                  >
+                    <option value="Todos">Todo o período</option>
+                    <option value="Hoje">Captados Hoje</option>
+                  </select>
+                </div>
+                <button 
+                  onClick={() => setFiltrosAtivos({bairro:'Todos', fonte_lead:'Todos', cnae_principal:'Todos', municipio:'Todos', data_captacao:'Todos'})}
+                  className="mt-2 text-[9px] font-bold text-red-500 uppercase py-2 bg-red-500/10 rounded-lg"
+                >
+                  Limpar todos os filtros
+                </button>
               </div>
             )}
-            <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest px-1">
-              {leadsFiltrados.length} resultados encontrados
-            </p>
+            <div className="flex justify-between px-1">
+               <p className="text-[9px] text-zinc-500 font-bold uppercase">{leadsFiltrados.length} leads selecionados</p>
+            </div>
           </div>
         )}
       </header>
@@ -199,12 +215,12 @@ export default function VendedorTRR_Master() {
 
         {moduloAtivo === 'cnpj' && (
           <div className="space-y-4">
-            <textarea placeholder="Cole CNPJs aqui..." className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-32 outline-none border border-zinc-800 focus:border-blue-500 transition-colors" value={cnpjBusca} onChange={(e) => setCnpjBusca(e.target.value)} />
+            <textarea placeholder="Cole CNPJs aqui..." className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-32 outline-none border border-zinc-800 focus:border-blue-500 text-white" value={cnpjBusca} onChange={(e) => setCnpjBusca(e.target.value)} />
             <button 
               onClick={async () => {
-                const lista = cnpjBusca.match(/\d{14}/g) || cnpjBusca.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g) || [];
-                for (const cnpj of lista) { await processarCNPJ(cnpj, "Busca Manual"); }
-                setStatusProcesso(''); setCnpjBusca(''); sincronizar();
+                const lista = cnpjBusca.match(/\d{14}/g) || [];
+                for (const c of lista) { await processarCNPJ(c, "Busca Manual"); }
+                setCnpjBusca(''); sincronizar();
               }} 
               className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm"
             >
@@ -214,20 +230,20 @@ export default function VendedorTRR_Master() {
         )}
 
         {moduloAtivo === 'todo' && (
-          <div className="bg-zinc-900/30 border border-white/5 rounded-2xl divide-y divide-zinc-800/50">
-            {carregando ? <div className="text-center py-20 text-[10px] animate-pulse tracking-[0.3em]">PROCESSANDO BASE...</div> :
+          <div className="bg-zinc-900/30 border border-white/5 rounded-2xl divide-y divide-zinc-800/50 overflow-hidden">
+            {carregando ? <div className="text-center py-20 text-[10px] animate-pulse tracking-[0.3em]">RECALCULANDO...</div> :
             leadsFiltrados.map(lead => (
-              <div key={lead.cnpj} className="py-4 px-4 flex justify-between items-center gap-3 hover:bg-zinc-900/50 transition-colors">
-                <div className="flex-1 overflow-hidden">
+              <div key={lead.cnpj} className="py-4 px-4 flex justify-between items-center gap-3 hover:bg-zinc-800/50 transition-colors">
+                <div className="flex-1 min-w-0">
                   <h3 className="text-[12px] font-bold uppercase truncate text-white leading-tight">{lead.razao_social}</h3>
-                  <p className="text-[10px] text-zinc-400 uppercase truncate mt-0.5">{lead.nome_fantasia || '---'}</p>
-                  <div className="flex gap-2 mt-2 flex-wrap">
+                  <p className="text-[9px] text-zinc-500 uppercase truncate mt-0.5 font-medium">{lead.nome_fantasia || '---'}</p>
+                  <div className="flex gap-1.5 mt-2.5 flex-wrap">
                     <span className="text-[8px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 font-bold uppercase">{lead.bairro}</span>
                     <span className="text-[8px] bg-blue-900/30 px-2 py-0.5 rounded text-blue-400 font-bold uppercase">{lead.cnpj}</span>
                     <span className="text-[8px] bg-orange-900/20 px-2 py-0.5 rounded text-orange-400 font-bold">CNAE: {lead.cnae_principal}</span>
                   </div>
                 </div>
-                <div className="shrink-0 flex flex-col gap-2">
+                <div className="shrink-0">
                   <button onClick={async () => { 
                     const novoStatus = aba === 'estoque' ? 'Triagem' : 'Em Prospecção';
                     await supabase.from('empresas_mestre').update({status_lead: novoStatus}).eq('cnpj', lead.cnpj); 
@@ -238,6 +254,9 @@ export default function VendedorTRR_Master() {
                 </div>
               </div>
             ))}
+            {!carregando && leadsFiltrados.length === 0 && (
+               <div className="py-20 text-center text-[10px] text-zinc-600 font-bold uppercase tracking-widest">Nenhum lead encontrado com estes filtros</div>
+            )}
           </div>
         )}
       </main>
