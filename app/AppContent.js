@@ -16,7 +16,7 @@ export default function VendedorTRR_Master() {
   const [resultadoBusca, setResultadoBusca] = useState('');
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
 
-  // Estados dos Filtros (Estilo Excel para todos os campos)
+  // Estados dos Filtros (Estilo Excel - Múltiplas Escolhas)
   const [filtrosAtivos, setFiltrosAtivos] = useState({
     razao_social: 'Todos',
     nome_fantasia: 'Todos',
@@ -31,9 +31,10 @@ export default function VendedorTRR_Master() {
   const sincronizar = async () => {
     try {
       setCarregando(true);
+      // Puxando * para garantir que o cnae_principal e todos os novos campos venham do banco
       const { data } = await supabase
         .from('empresas_mestre')
-        .select('*')
+        .select('*') 
         .eq('status_lead', aba === 'estoque' ? 'Novo' : 'Triagem')
         .order('razao_social', { ascending: true });
       setLeads(data || []);
@@ -151,21 +152,20 @@ export default function VendedorTRR_Master() {
             <input 
               type="text" 
               placeholder="Pesquisa rápida global..." 
-              className="w-full bg-zinc-900 p-3 rounded-xl text-xs outline-none border border-zinc-800 focus:border-blue-500 transition-colors text-white"
+              className="w-full bg-zinc-900/80 p-3 rounded-xl text-xs outline-none border border-zinc-800 focus:border-blue-500 transition-colors text-white"
               value={buscaGlobal}
               onChange={(e) => setBuscaGlobal(e.target.value)}
             />
             
             {mostrarFiltros && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-zinc-900/50 rounded-2xl border border-white/5 animate-in slide-in-from-top-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4 bg-zinc-900/80 rounded-2xl border border-white/5 animate-in slide-in-from-top-4">
                 {[
                   { label: 'Razão Social', campo: 'razao_social' },
                   { label: 'Nome Fantasia', campo: 'nome_fantasia' },
                   { label: 'CNPJ', campo: 'cnpj' },
                   { label: 'Bairro', campo: 'bairro' },
                   { label: 'Fonte', campo: 'fonte_lead' },
-                  { label: 'CNAE', campo: 'cnae_principal' },
-                  { label: 'Cidade', campo: 'municipio' }
+                  { label: 'CNAE', campo: 'cnae_principal' }
                 ].map(filtro => (
                   <div key={filtro.campo} className="flex flex-col gap-1">
                     <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">{filtro.label}</label>
@@ -192,7 +192,7 @@ export default function VendedorTRR_Master() {
                 </div>
                 <button 
                   onClick={() => setFiltrosAtivos({razao_social:'Todos', nome_fantasia:'Todos', cnpj:'Todos', bairro:'Todos', fonte_lead:'Todos', cnae_principal:'Todos', municipio:'Todos', data_captacao:'Todos'})}
-                  className="md:col-span-2 mt-2 text-[9px] font-bold text-red-500 uppercase py-3 bg-red-500/10 rounded-lg hover:bg-red-500/20 transition-colors"
+                  className="lg:col-span-3 mt-2 text-[9px] font-bold text-red-500 uppercase py-3 bg-red-500/10 rounded-lg hover:bg-red-500/20 transition-colors"
                 >
                   Limpar Todos os Filtros
                 </button>
@@ -232,17 +232,19 @@ export default function VendedorTRR_Master() {
         {moduloAtivo === 'todo' && (
           <div className="bg-zinc-900/30 border border-white/5 rounded-2xl divide-y divide-zinc-800/50">
             {carregando ? (
-              <div className="text-center py-20 text-[10px] animate-pulse tracking-[0.3em]">RECALCULANDO...</div>
+              <div className="text-center py-20 text-[10px] animate-pulse tracking-[0.3em]">ATUALIZANDO LISTA...</div>
             ) : (
               leadsFiltrados.map(lead => (
-                <div key={lead.cnpj} className="py-4 px-4 flex justify-between items-center gap-3 hover:bg-zinc-800/50 transition-colors">
+                <div key={lead.cnpj} className="py-4 px-4 flex justify-between items-center gap-3 hover:bg-zinc-800/40 transition-colors">
                   <div className="flex-1 min-w-0">
                     <h3 className="text-[12px] font-bold uppercase truncate text-white leading-tight">{lead.razao_social}</h3>
                     <p className="text-[9px] text-zinc-500 uppercase truncate mt-0.5 font-medium italic">{lead.nome_fantasia || 'Sem nome fantasia'}</p>
                     <div className="flex gap-1.5 mt-2.5 flex-wrap">
-                      <span className="text-[8px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 font-bold uppercase">{lead.bairro}</span>
-                      <span className="text-[8px] bg-blue-900/30 px-2 py-0.5 rounded text-blue-400 font-bold uppercase">{lead.cnpj}</span>
-                      <span className="text-[8px] bg-orange-900/20 px-2 py-0.5 rounded text-orange-400 font-bold">CNAE: {lead.cnae_principal}</span>
+                      <span className="text-[8px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 font-bold uppercase border border-white/5">{lead.bairro}</span>
+                      <span className="text-[8px] bg-blue-900/20 px-2 py-0.5 rounded text-blue-400 font-bold uppercase border border-blue-500/10">{lead.cnpj}</span>
+                      <span className="text-[8px] bg-orange-900/20 px-2 py-0.5 rounded text-orange-400 font-bold border border-orange-500/10">
+                        CNAE: {lead.cnae_principal || 'Não informado'}
+                      </span>
                     </div>
                   </div>
                   <div className="shrink-0">
