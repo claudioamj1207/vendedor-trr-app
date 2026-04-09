@@ -14,7 +14,7 @@ export default function VendedorTRR_Master() {
   const [carregando, setCarregando] = useState(true);
   const [statusProcesso, setStatusProcesso] = useState('');
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
-  const [totalReal, setTotalReal] = useState(0); // Estado para o contador real
+  const [totalReal, setTotalReal] = useState(0);
 
   const [filtrosAtivos, setFiltrosAtivos] = useState({
     razao_social: 'Todos',
@@ -26,20 +26,41 @@ export default function VendedorTRR_Master() {
     cnae_secundario: 'Todos'
   });
 
+  // Função para buscar TODOS os leads em lotes para vencer o limite de 1000
   const sincronizar = async () => {
     try {
       setCarregando(true);
-      // Busca com contagem exata e range estendido para quebrar a barreira de 1000
-      const { data, count } = await supabase
-        .from('empresas_mestre')
-        .select('*', { count: 'exact' }) 
-        .eq('status_lead', aba === 'estoque' ? 'Novo' : 'Triagem')
-        .order('razao_social', { ascending: true })
-        .range(0, 5000); 
+      let todosLeads = [];
+      let de = 0;
+      let ate = 999;
+      let continua = true;
+
+      while (continua) {
+        const { data, count, error } = await supabase
+          .from('empresas_mestre')
+          .select('*', { count: 'exact' })
+          .eq('status_lead', aba === 'estoque' ? 'Novo' : 'Triagem')
+          .order('razao_social', { ascending: true })
+          .range(de, ate);
+
+        if (error) throw error;
+
+        todosLeads = [...todosLeads, ...data];
+        if (count) setTotalReal(count);
         
-      setLeads(data || []);
-      setTotalReal(count || (data ? data.length : 0));
-    } finally { setCarregando(false); }
+        if (data.length < 1000) {
+          continua = false;
+        } else {
+          de += 1000;
+          ate += 1000;
+        }
+      }
+      setLeads(todosLeads);
+    } catch (e) {
+      console.error("Erro na sincronização:", e);
+    } finally {
+      setCarregando(false);
+    }
   };
 
   useEffect(() => { sincronizar(); }, [aba, moduloAtivo]);
@@ -141,9 +162,9 @@ export default function VendedorTRR_Master() {
   return (
     <div className="min-h-screen bg-black text-white pb-40 font-sans antialiased">
       <header className="px-5 pt-8 pb-4 sticky top-0 bg-black/95 border-b border-white/5 z-50">
-        <div className="flex justify-between items-center mb-2">
+        <div className="flex justify-between items-center mb-2 text-white">
           <h1 className="text-[10px] font-black text-blue-500 uppercase italic tracking-widest">Vendedor TRR</h1>
-          <div className="flex gap-3 text-[9px] font-bold uppercase text-white">
+          <div className="flex gap-3 text-[9px] font-bold uppercase">
              {['todo', 'arquivo', 'cnpj'].map(m => (
                <button key={m} onClick={() => setModuloAtivo(m)} className={moduloAtivo === m ? 'text-white border-b border-blue-500' : 'text-zinc-600'}>
                  {m === 'todo' ? 'LISTA' : m === 'arquivo' ? 'ARQUIVO' : 'BUSCA CNPJ'}
@@ -153,17 +174,17 @@ export default function VendedorTRR_Master() {
         </div>
         
         <div className="flex justify-between items-center">
-          <h2 className="text-3xl font-black italic uppercase tracking-tighter">
+          <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">
             {moduloAtivo === 'todo' ? (aba === 'triagem' ? 'Triagem' : 'Estoque') : 'Módulo Busca'}
           </h2>
           <div className="flex gap-2">
             {moduloAtivo === 'todo' && (
               <>
-                <button onClick={limparInativos} className="text-[9px] bg-red-600 px-3 py-2 rounded-full font-bold">🗑️ LIMPAR INATIVOS</button>
-                <button onClick={atualizarFaltantes} className="text-[9px] bg-emerald-600 px-3 py-2 rounded-full font-bold">🔄 ENRIQUECER</button>
+                <button onClick={limparInativos} className="text-[9px] bg-red-600 px-3 py-2 rounded-full font-bold text-white">🗑️ LIMPAR INATIVOS</button>
+                <button onClick={atualizarFaltantes} className="text-[9px] bg-emerald-600 px-3 py-2 rounded-full font-bold text-white">🔄 ENRIQUECER</button>
               </>
             )}
-            <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className="text-[9px] bg-zinc-800 px-3 py-2 rounded-full font-bold border border-white/10">FILTROS</button>
+            <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className="text-[9px] bg-zinc-800 px-3 py-2 rounded-full font-bold border border-white/10 text-white">FILTROS</button>
           </div>
         </div>
 
@@ -185,8 +206,8 @@ export default function VendedorTRR_Master() {
                 ))}
               </div>
             )}
-            <div className="flex justify-between items-center">
-              <p className="text-[9px] text-zinc-500 font-bold uppercase">
+            <div className="flex justify-between items-center px-1">
+              <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">
                 {leadsFiltrados.length} Filtrados de {totalReal} Total
               </p>
               {statusProcesso && <p className="text-[9px] text-blue-500 animate-pulse font-black uppercase italic">{statusProcesso}</p>}
@@ -198,9 +219,9 @@ export default function VendedorTRR_Master() {
       <main className="px-4 mt-6">
         {moduloAtivo === 'todo' && (
           <div className="bg-zinc-900/30 border border-white/5 rounded-2xl divide-y divide-zinc-800/50">
-            {carregando ? <div className="text-center py-20 text-[10px] animate-pulse text-zinc-600 font-black uppercase">Sincronizando...</div> :
+            {carregando ? <div className="text-center py-20 text-[10px] animate-pulse text-zinc-600 font-black uppercase tracking-widest">Sincronizando Base de Dados...</div> :
             leadsFiltrados.map(lead => (
-              <div key={lead.cnpj} className="py-4 px-4 flex justify-between items-center gap-3">
+              <div key={lead.cnpj} className="py-4 px-4 flex justify-between items-center gap-3 hover:bg-zinc-800/40 transition-colors">
                 <div className="flex-1 min-w-0">
                   <h3 className="text-[12px] font-bold uppercase truncate text-white leading-tight">{lead.razao_social}</h3>
                   <div className="flex gap-2 mt-2 flex-wrap">
@@ -210,13 +231,13 @@ export default function VendedorTRR_Master() {
                     {lead.cnae_secundario && <span className="text-[8px] bg-zinc-900/50 px-2 py-0.5 rounded text-zinc-500 font-medium truncate max-w-[200px] italic">Sec: {lead.cnae_secundario}</span>}
                   </div>
                 </div>
-                <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: aba === 'estoque' ? 'Triagem' : 'Em Prospecção'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center text-white">➡️</button>
+                <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: aba === 'estoque' ? 'Triagem' : 'Em Prospecção'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center text-white active:scale-95 transition-all">➡️</button>
               </div>
             ))}
           </div>
         )}
         {moduloAtivo === 'arquivo' && <div className="bg-zinc-900 p-12 rounded-3xl border border-dashed border-zinc-800 text-center max-w-2xl mx-auto"><input type="file" onChange={extrairEPesquisar} className="text-xs mb-4 w-full text-zinc-400" /></div>}
-        {moduloAtivo === 'cnpj' && <div className="max-w-2xl mx-auto space-y-4"><textarea placeholder="Cole CNPJs..." className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-40 outline-none border border-zinc-800 text-white" value={cnpjBusca} onChange={(e) => setCnpjBusca(e.target.value)} /><button onClick={async () => { const lista = cnpjBusca.match(/\d{14}/g) || []; for (const c of lista) { await processarCNPJ(c, {fonte_lead: "Busca Manual"}); } setCnpjBusca(''); sincronizar(); }} className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm text-white">PESQUISAR E SALVAR</button></div>}
+        {moduloAtivo === 'cnpj' && <div className="max-w-2xl mx-auto space-y-4 text-white"><textarea placeholder="Cole CNPJs..." className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-40 outline-none border border-zinc-800 text-white" value={cnpjBusca} onChange={(e) => setCnpjBusca(e.target.value)} /><button onClick={async () => { const lista = cnpjBusca.match(/\d{14}/g) || []; for (const c of lista) { await processarCNPJ(c, {fonte_lead: "Busca Manual"}); } setCnpjBusca(''); sincronizar(); }} className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm text-white">PESQUISAR E SALVAR</button></div>}
       </main>
       <nav className="fixed bottom-6 left-6 right-6 h-16 bg-zinc-900/90 backdrop-blur-md border border-white/10 rounded-full px-8 flex justify-around items-center z-50">
         {['estoque', 'triagem'].map(a => <button key={a} onClick={() => setAba(a)} className={`text-[11px] font-black uppercase tracking-widest ${aba === a ? 'text-blue-500' : 'text-zinc-600'}`}>{a}</button>)}
