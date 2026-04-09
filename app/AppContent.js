@@ -26,6 +26,19 @@ export default function VendedorTRR_Master() {
     cnae_secundario: 'Todos'
   });
 
+  const extrairCNPJsDoTexto = (texto) => {
+    if (!texto) return [];
+
+    const regex = /\d{2}[.\s,/-]?\d{3}[.\s,/-]?\d{3}[\/\s-]?\d{4}[-\s]?\d{2}|\d{14}/g;
+    const encontrados = texto.match(regex) || [];
+
+    return [...new Set(
+      encontrados
+        .map((item) => String(item).replace(/\D/g, ''))
+        .filter((cnpj) => cnpj.length === 14)
+    )];
+  };
+
   const sincronizar = async () => {
     try {
       setCarregando(true);
@@ -34,9 +47,7 @@ export default function VendedorTRR_Master() {
         .from('empresas_mestre')
         .select('*', { count: 'exact', head: true });
 
-      if (erroCount) {
-        throw erroCount;
-      }
+      if (erroCount) throw erroCount;
 
       setTotalAbsoluto(totalBanco || 0);
 
@@ -53,9 +64,7 @@ export default function VendedorTRR_Master() {
           .order('razao_social', { ascending: true })
           .range(de, ate);
 
-        if (error) {
-          throw error;
-        }
+        if (error) throw error;
 
         todosLeads = [...todosLeads, ...(data || [])];
 
@@ -78,7 +87,7 @@ export default function VendedorTRR_Master() {
 
   useEffect(() => {
     sincronizar();
-  }, [aba, moduloAtivo]);
+  }, [aba]);
 
   const leadsFiltrados = useMemo(() => {
     return leads.filter((lead) => {
@@ -140,57 +149,57 @@ export default function VendedorTRR_Master() {
     const cnpjLimpo = String(cnpj).replace(/\D/g, '');
 
     if (cnpjLimpo.length !== 14) {
-      return { ok: false, erro: "CNPJ Inválido" };
+      return { ok: false, erro: "CNPJ inválido" };
     }
 
     try {
       const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
 
       if (!res.ok) {
-        return { ok: false, erro: "Falha na consulta à API da Receita" };
+        return { ok: false, erro: `Falha na consulta da Receita para ${cnpjLimpo}` };
       }
 
       const info = await res.json();
 
-      if (info.cnpj) {
-        const descSec = info.cnaes_secundarios
-          ? info.cnaes_secundarios.map((c) => c.descricao).join(' | ')
-          : 'Não informado';
-
-        const { error } = await supabase
-          .from('empresas_mestre')
-          .upsert(
-            {
-              ...leadExistente,
-              cnpj: cnpjLimpo,
-              razao_social: info.razao_social || '',
-              nome_fantasia: info.nome_fantasia || info.razao_social || '',
-              logradouro: info.logradouro || '',
-              numero: info.numero || '',
-              bairro: info.bairro || '',
-              municipio: info.municipio || '',
-              uf: info.uf || '',
-              cnae_principal_codigo: info.cnae_fiscal ? String(info.cnae_fiscal) : '',
-              cnae_principal_descricao: info.cnae_fiscal_descricao || 'Não informado',
-              cnae_secundario: descSec,
-              situacao_cadastral: info.descricao_situacao_cadastral || 'ATIVA',
-              status_lead: leadExistente.status_lead || 'Novo',
-              fonte_lead: leadExistente.fonte_lead || 'Busca Manual'
-            },
-            { onConflict: 'cnpj' }
-          );
-
-        if (error) {
-          return { ok: false, erro: error.message };
-        }
-
-        return {
-          ok: true,
-          situacao: info.descricao_situacao_cadastral
-        };
+      if (!info?.cnpj) {
+        return { ok: false, erro: `CNPJ não encontrado: ${cnpjLimpo}` };
       }
 
-      return { ok: false, erro: "CNPJ não encontrado na Receita" };
+      const descSec = info.cnaes_secundarios
+        ? info.cnaes_secundarios.map((c) => c.descricao).join(' | ')
+        : 'Não informado';
+
+      const { error } = await supabase
+        .from('empresas_mestre')
+        .upsert(
+          {
+            ...leadExistente,
+            cnpj: cnpjLimpo,
+            razao_social: info.razao_social || '',
+            nome_fantasia: info.nome_fantasia || info.razao_social || '',
+            logradouro: info.logradouro || '',
+            numero: info.numero || '',
+            bairro: info.bairro || '',
+            municipio: info.municipio || '',
+            uf: info.uf || '',
+            cnae_principal_codigo: info.cnae_fiscal ? String(info.cnae_fiscal) : '',
+            cnae_principal_descricao: info.cnae_fiscal_descricao || 'Não informado',
+            cnae_secundario: descSec,
+            situacao_cadastral: info.descricao_situacao_cadastral || 'ATIVA',
+            status_lead: leadExistente.status_lead || 'Novo',
+            fonte_lead: leadExistente.fonte_lead || 'Busca Manual'
+          },
+          { onConflict: 'cnpj' }
+        );
+
+      if (error) {
+        return { ok: false, erro: `Erro ao salvar no banco: ${error.message}` };
+      }
+
+      return {
+        ok: true,
+        situacao: info.descricao_situacao_cadastral
+      };
     } catch (err) {
       return { ok: false, erro: "Falha de conexão com a API da Receita" };
     }
@@ -201,10 +210,14 @@ export default function VendedorTRR_Master() {
       return;
     }
 
+    setResultadoBusca('');
+    setErroBusca('');
+
     let excluidos = 0;
 
-    for (const lead of leadsFiltrados) {
-      setStatusProcesso(`Verificando: ${lead.razao_social}`);
+    for (let i = 0; i < leadsFiltrados.length; i++) {
+      const lead = leadsFiltrados[i];
+      setStatusProcesso(`Verificando ${i + 1} de ${leadsFiltrados.length}: ${lead.razao_social}`);
 
       const resultado = await processarCNPJ(lead.cnpj, lead);
 
@@ -218,10 +231,13 @@ export default function VendedorTRR_Master() {
 
     setStatusProcesso('');
     setResultadoBusca(`${excluidos} empresa(s) inativa(s) removida(s).`);
-    sincronizar();
+    await sincronizar();
   };
 
   const atualizarFaltantes = async () => {
+    setResultadoBusca('');
+    setErroBusca('');
+
     const { data: faltantes, error } = await supabase
       .from('empresas_mestre')
       .select('*')
@@ -241,18 +257,16 @@ export default function VendedorTRR_Master() {
       return;
     }
 
-    let sucesso = 0;
-
-    for (const lead of faltantes) {
-      sucesso++;
-      setStatusProcesso(`${sucesso}/${faltantes.length}`);
+    for (let i = 0; i < faltantes.length; i++) {
+      const lead = faltantes[i];
+      setStatusProcesso(`Atualizando ${i + 1} de ${faltantes.length}`);
       await processarCNPJ(lead.cnpj, lead);
       await new Promise((r) => setTimeout(r, 450));
     }
 
     setStatusProcesso('');
     setResultadoBusca(`${faltantes.length} lead(s) reprocessado(s).`);
-    sincronizar();
+    await sincronizar();
   };
 
   const extrairEPesquisar = async (e) => {
@@ -290,6 +304,7 @@ export default function VendedorTRR_Master() {
 
         for (let i = 0; i < cnpjs.length; i++) {
           setStatusProcesso(`Processando arquivo: ${i + 1} de ${cnpjs.length}...`);
+
           const r = await processarCNPJ(cnpjs[i], {
             fonte_lead: `Arquivo: ${file.name}`
           });
@@ -308,10 +323,10 @@ export default function VendedorTRR_Master() {
         if (sucesso === 0 && ultimoErro) {
           setErroBusca(`Erro no processamento: ${ultimoErro}`);
         } else {
-          setResultadoBusca(`Arquivo concluído: ${sucesso} empresas salvas.`);
+          setResultadoBusca(`Arquivo concluído: ${sucesso} empresa(s) salva(s).`);
         }
 
-        sincronizar();
+        await sincronizar();
       } catch (err) {
         setStatusProcesso('');
         setErroBusca('Erro ao ler o arquivo.');
@@ -323,6 +338,52 @@ export default function VendedorTRR_Master() {
     } else {
       reader.readAsText(file);
     }
+  };
+
+  const buscarECadastrarCNPJs = async () => {
+    setResultadoBusca('');
+    setErroBusca('');
+
+    const cnpjs = extrairCNPJsDoTexto(cnpjBusca);
+
+    if (cnpjs.length === 0) {
+      setErroBusca('Nenhum CNPJ válido foi encontrado no texto digitado.');
+      return;
+    }
+
+    let sucesso = 0;
+    let ultimoErro = '';
+
+    for (let i = 0; i < cnpjs.length; i++) {
+      const atual = cnpjs[i];
+      setStatusProcesso(`Processando ${i + 1} de ${cnpjs.length}: ${atual}`);
+
+      const r = await processarCNPJ(atual, { fonte_lead: 'Busca Manual' });
+
+      if (r && r.ok) {
+        sucesso++;
+      } else if (r && r.erro) {
+        ultimoErro = r.erro;
+      }
+
+      await new Promise((res) => setTimeout(res, 400));
+    }
+
+    setStatusProcesso('');
+
+    if (sucesso === 0 && ultimoErro) {
+      setErroBusca(`Nenhum CNPJ foi salvo. Motivo: ${ultimoErro}`);
+      return;
+    }
+
+    if (ultimoErro) {
+      setResultadoBusca(`Salvos ${sucesso} de ${cnpjs.length}. Falha em alguns: ${ultimoErro}`);
+    } else {
+      setResultadoBusca(`Sucesso: ${sucesso} CNPJ(s) salvo(s).`);
+    }
+
+    setCnpjBusca('');
+    await sincronizar();
   };
 
   return (
@@ -341,6 +402,7 @@ export default function VendedorTRR_Master() {
                   setModuloAtivo(m);
                   setResultadoBusca('');
                   setErroBusca('');
+                  setStatusProcesso('');
                 }}
                 className={
                   moduloAtivo === m
@@ -545,7 +607,7 @@ export default function VendedorTRR_Master() {
                         })
                         .eq('cnpj', lead.cnpj);
 
-                      sincronizar();
+                      await sincronizar();
                     }}
                     className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center text-white active:scale-95 transition-all"
                   >
@@ -585,47 +647,7 @@ export default function VendedorTRR_Master() {
             />
 
             <button
-              onClick={async () => {
-                const regex = /\d{2}[\.,]?\d{3}[\.,]?\d{3}\/?\d{4}-?\d{2}|\d{14}/g;
-                const matches = cnpjBusca.match(regex) || [];
-                const cnpjs = [...new Set(matches)];
-
-                if (cnpjs.length === 0) {
-                  alert("Nenhum CNPJ detectado no texto.");
-                  return;
-                }
-
-                setResultadoBusca('');
-                setErroBusca('');
-                let sucesso = 0;
-                let ultimoErro = '';
-
-                for (let i = 0; i < cnpjs.length; i++) {
-                  setStatusProcesso(`Processando ${i + 1} de ${cnpjs.length}...`);
-                  const r = await processarCNPJ(cnpjs[i], { fonte_lead: "Busca Manual" });
-
-                  if (r && r.ok) {
-                    sucesso++;
-                  } else if (r && r.erro) {
-                    ultimoErro = r.erro;
-                  }
-
-                  await new Promise((res) => setTimeout(res, 400));
-                }
-
-                setStatusProcesso('');
-                setCnpjBusca('');
-
-                if (sucesso === 0 && ultimoErro) {
-                  setErroBusca(`Erro: ${ultimoErro}`);
-                } else if (ultimoErro) {
-                  setResultadoBusca(`Salvos ${sucesso} de ${cnpjs.length}. (Falha em alguns: ${ultimoErro})`);
-                } else {
-                  setResultadoBusca(`Sucesso: ${sucesso} CNPJs salvos.`);
-                }
-
-                sincronizar();
-              }}
+              onClick={buscarECadastrarCNPJs}
               className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm text-white shadow-lg active:scale-95 transition-all"
             >
               PESQUISAR E SALVAR
