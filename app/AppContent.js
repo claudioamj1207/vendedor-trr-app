@@ -13,6 +13,7 @@ export default function VendedorTRR_Master() {
   const [cnpjBusca, setCnpjBusca] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [statusProcesso, setStatusProcesso] = useState('');
+  const [resultadoBusca, setResultadoBusca] = useState('');
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const [totalAbsoluto, setTotalAbsoluto] = useState(0);
 
@@ -143,11 +144,23 @@ export default function VendedorTRR_Master() {
   const extrairEPesquisar = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    setResultadoBusca('');
+    setStatusProcesso('Lendo arquivo...');
     const reader = new FileReader();
     reader.onload = async (evt) => {
       let textoBruto = file.name.endsWith('.xlsx') ? JSON.stringify(XLSX.utils.sheet_to_json(XLSX.read(evt.target.result, { type: 'binary' }).Sheets[XLSX.read(evt.target.result, { type: 'binary' }).SheetNames[0]])) : evt.target.result;
-      const cnpjs = [...new Set(textoBruto.match(/\d{14}/g) || [])];
-      for (const c of cnpjs) { await processarCNPJ(c, {fonte_lead: `Arquivo: ${file.name}`}); }
+      const cnpjsRegex = /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{14}/g;
+      const cnpjs = [...new Set(textoBruto.match(cnpjsRegex) || [])];
+      
+      let sucesso = 0;
+      for (let i = 0; i < cnpjs.length; i++) {
+        setStatusProcesso(`Capturando arquivo: ${i + 1} de ${cnpjs.length}...`);
+        const r = await processarCNPJ(cnpjs[i], {fonte_lead: `Arquivo: ${file.name}`}); 
+        if(r) sucesso++;
+        await new Promise(res => setTimeout(res, 400));
+      }
+      setStatusProcesso('');
+      setResultadoBusca(`Arquivo processado: ${sucesso} de ${cnpjs.length} empresas salvas.`);
       sincronizar();
     };
     file.name.endsWith('.xlsx') ? reader.readAsBinaryString(file) : reader.readAsText(file);
@@ -160,7 +173,7 @@ export default function VendedorTRR_Master() {
           <h1 className="text-[10px] font-black text-blue-500 uppercase italic tracking-widest">Vendedor TRR</h1>
           <div className="flex gap-3 text-[9px] font-bold uppercase">
              {['todo', 'arquivo', 'cnpj'].map(m => (
-               <button key={m} onClick={() => setModuloAtivo(m)} className={moduloAtivo === m ? 'text-white border-b border-blue-500' : 'text-zinc-600'}>
+               <button key={m} onClick={() => { setModuloAtivo(m); setResultadoBusca(''); }} className={moduloAtivo === m ? 'text-white border-b border-blue-500' : 'text-zinc-600'}>
                  {m === 'todo' ? 'LISTA' : m === 'arquivo' ? 'ARQUIVO' : 'BUSCA CNPJ'}
                </button>
              ))}
@@ -168,7 +181,7 @@ export default function VendedorTRR_Master() {
         </div>
         
         <div className="flex justify-between items-center">
-          <h2 className="text-3xl font-black italic uppercase tracking-tighter">
+          <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">
             {moduloAtivo === 'todo' ? (aba === 'triagem' ? 'Triagem' : 'Estoque') : 'Módulo Busca'}
           </h2>
           <div className="flex gap-2">
@@ -213,6 +226,14 @@ export default function VendedorTRR_Master() {
       </header>
 
       <main className="px-4 mt-6">
+        {/* BANNER DE RESULTADOS DE BUSCA/ARQUIVO RESTAURADO AQUI */}
+        {resultadoBusca && (
+          <div className="bg-emerald-900/30 border border-emerald-500/50 p-4 rounded-2xl mb-6 flex justify-between items-center text-emerald-400 text-xs font-bold animate-in fade-in">
+            <span>✅ {resultadoBusca}</span>
+            <button onClick={() => setResultadoBusca('')} className="bg-emerald-500/20 px-3 py-1 rounded-full text-[10px]">OK</button>
+          </div>
+        )}
+
         {moduloAtivo === 'todo' && (
           <div className="bg-zinc-900/30 border border-white/5 rounded-2xl divide-y divide-zinc-800/50">
             {carregando ? <div className="text-center py-20 text-[10px] animate-pulse text-zinc-600 font-black uppercase tracking-widest">Sincronizando...</div> :
@@ -224,7 +245,7 @@ export default function VendedorTRR_Master() {
                     <span className="text-[8px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 font-bold border border-white/5 uppercase">{lead.bairro}</span>
                     <span className="text-[8px] bg-blue-900/20 px-2 py-0.5 rounded text-blue-400 font-bold border border-blue-500/10 uppercase">{lead.cnpj}</span>
                     <span className="text-[8px] bg-orange-900/20 px-2 py-0.5 rounded text-orange-400 font-bold border border-orange-500/10 truncate max-w-[200px]">{lead.cnae_principal_descricao || 'SEM CNAE'}</span>
-                    {lead.cnae_secundario && <span className="text-[8px] bg-zinc-900/50 px-2 py-0.5 rounded text-zinc-500 font-medium truncate max-w-[200px] italic">Sec: {lead.cnae_secundario}</span>}
+                    {lead.cnae_secundario && <span className="text-[8px] bg-zinc-900/50 px-2 py-0.5 rounded text-zinc-500 font-medium truncate max-w-[200px] italic text-white">Sec: {lead.cnae_secundario}</span>}
                   </div>
                 </div>
                 <button onClick={async () => { await supabase.from('empresas_mestre').update({status_lead: aba === 'estoque' ? 'Triagem' : 'Em Prospecção'}).eq('cnpj', lead.cnpj); sincronizar(); }} className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center text-white active:scale-95 transition-all">➡️</button>
@@ -232,8 +253,49 @@ export default function VendedorTRR_Master() {
             ))}
           </div>
         )}
-        {moduloAtivo === 'arquivo' && <div className="bg-zinc-900 p-12 rounded-3xl border border-dashed border-zinc-800 text-center max-w-2xl mx-auto"><input type="file" onChange={extrairEPesquisar} className="text-xs mb-4 w-full text-zinc-400" /></div>}
-        {moduloAtivo === 'cnpj' && <div className="max-w-2xl mx-auto space-y-4 text-white"><textarea placeholder="Cole CNPJs..." className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-40 outline-none border border-zinc-800 text-white" value={cnpjBusca} onChange={(e) => setCnpjBusca(e.target.value)} /><button onClick={async () => { const lista = cnpjBusca.match(/\d{14}/g) || []; for (const c of lista) { await processarCNPJ(c, {fonte_lead: "Busca Manual"}); } setCnpjBusca(''); sincronizar(); }} className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm text-white">PESQUISAR E SALVAR</button></div>}
+        
+        {moduloAtivo === 'arquivo' && (
+          <div className="bg-zinc-900 p-12 rounded-3xl border border-dashed border-zinc-800 text-center max-w-2xl mx-auto">
+            <input type="file" onChange={extrairEPesquisar} className="text-xs mb-4 w-full text-zinc-400" />
+            {statusProcesso && <p className="mt-4 text-blue-500 text-[10px] animate-pulse font-bold uppercase">{statusProcesso}</p>}
+          </div>
+        )}
+        
+        {moduloAtivo === 'cnpj' && (
+          <div className="max-w-2xl mx-auto space-y-4 text-white">
+            <textarea 
+              placeholder="Cole os CNPJs aqui (com ou sem pontuação)..." 
+              className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-40 outline-none border border-zinc-800 text-white" 
+              value={cnpjBusca} 
+              onChange={(e) => setCnpjBusca(e.target.value)} 
+            />
+            <button 
+              onClick={async () => { 
+                const regex = /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{14}/g;
+                const matches = cnpjBusca.match(regex) || [];
+                const lista = [...new Set(matches)]; // remove duplicados
+                
+                if (lista.length === 0) return alert("Nenhum CNPJ encontrado no texto.");
+                
+                setResultadoBusca('');
+                let sucesso = 0;
+                for (let i = 0; i < lista.length; i++) { 
+                  setStatusProcesso(`Processando ${i + 1} de ${lista.length}...`);
+                  const r = await processarCNPJ(lista[i], {fonte_lead: "Busca Manual"}); 
+                  if (r) sucesso++;
+                  await new Promise(res => setTimeout(res, 400));
+                } 
+                setStatusProcesso(''); 
+                setCnpjBusca(''); 
+                setResultadoBusca(`Busca Manual: ${sucesso} de ${lista.length} CNPJs processados com sucesso.`);
+                sincronizar(); 
+              }} 
+              className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm text-white shadow-lg active:scale-95 transition-all"
+            >
+              PESQUISAR E SALVAR
+            </button>
+          </div>
+        )}
       </main>
 
       <nav className="fixed bottom-6 left-6 right-6 h-16 bg-zinc-900/90 backdrop-blur-md border border-white/10 rounded-full px-8 flex justify-around items-center z-50 shadow-2xl">
