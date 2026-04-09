@@ -32,11 +32,13 @@ export default function VendedorTRR_Master() {
     const regex = /\d{2}[.\s,/-]?\d{3}[.\s,/-]?\d{3}[\/\s-]?\d{4}[-\s]?\d{2}|\d{14}/g;
     const encontrados = texto.match(regex) || [];
 
-    return [...new Set(
-      encontrados
-        .map((item) => String(item).replace(/\D/g, ''))
-        .filter((cnpj) => cnpj.length === 14)
-    )];
+    return [
+      ...new Set(
+        encontrados
+          .map((item) => String(item).replace(/\D/g, ''))
+          .filter((cnpj) => cnpj.length === 14)
+      )
+    ];
   };
 
   const sincronizar = async () => {
@@ -395,7 +397,7 @@ export default function VendedorTRR_Master() {
           </h1>
 
           <div className="flex gap-3 text-[9px] font-bold uppercase">
-            {['todo', 'arquivo', 'cnpj'].map((m) => (
+            {['todo', 'pescaria'].map((m) => (
               <button
                 key={m}
                 onClick={() => {
@@ -410,7 +412,7 @@ export default function VendedorTRR_Master() {
                     : 'text-zinc-600'
                 }
               >
-                {m === 'todo' ? 'LISTA' : m === 'arquivo' ? 'ARQUIVO' : 'BUSCA CNPJ'}
+                {m === 'todo' ? 'LISTA' : 'PESCARIA DE CNPJ'}
               </button>
             ))}
           </div>
@@ -422,7 +424,7 @@ export default function VendedorTRR_Master() {
               ? aba === 'triagem'
                 ? 'Triagem'
                 : 'Estoque'
-              : 'Módulo Busca'}
+              : 'Pescaria de CNPJ'}
           </h2>
 
           <div className="flex gap-2">
@@ -619,39 +621,47 @@ export default function VendedorTRR_Master() {
           </div>
         )}
 
-        {moduloAtivo === 'arquivo' && (
-          <div className="bg-zinc-900 p-12 rounded-3xl border border-dashed border-zinc-800 text-center max-w-2xl mx-auto">
-            <input
-              type="file"
-              onChange={extrairEPesquisar}
-              className="text-xs mb-4 w-full text-zinc-400"
-            />
-            <p className="text-[10px] text-zinc-500 mb-2">
-              Excel (.xlsx), texto (.txt) e PDF textual
-            </p>
-            {statusProcesso && (
-              <p className="mt-4 text-blue-500 text-[10px] animate-pulse font-bold uppercase">
-                {statusProcesso}
+        {moduloAtivo === 'pescaria' && (
+          <div className="max-w-3xl mx-auto space-y-8">
+            <div className="bg-zinc-900 p-8 rounded-3xl border border-dashed border-zinc-800 text-center">
+              <h3 className="text-lg font-black uppercase mb-3 text-white">Upload de arquivo</h3>
+              <p className="text-[11px] text-zinc-500 mb-4">
+                Envie Excel (.xlsx), texto (.txt) ou PDF textual para pescar CNPJs.
               </p>
-            )}
-          </div>
-        )}
 
-        {moduloAtivo === 'cnpj' && (
-          <div className="max-w-2xl mx-auto space-y-4 text-white">
-            <textarea
-              placeholder="Cole os CNPJs aqui..."
-              className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-40 outline-none border border-zinc-800 text-white"
-              value={cnpjBusca}
-              onChange={(e) => setCnpjBusca(e.target.value)}
-            />
+              <input
+                type="file"
+                onChange={extrairEPesquisar}
+                className="text-xs mb-4 w-full text-zinc-400"
+              />
 
-            <button
-              onClick={buscarECadastrarCNPJs}
-              className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm text-white shadow-lg active:scale-95 transition-all"
-            >
-              PESQUISAR E SALVAR
-            </button>
+              {statusProcesso && (
+                <p className="mt-4 text-blue-500 text-[10px] animate-pulse font-bold uppercase">
+                  {statusProcesso}
+                </p>
+              )}
+            </div>
+
+            <div className="max-w-3xl mx-auto space-y-4 text-white">
+              <h3 className="text-lg font-black uppercase text-white">Colar texto ou lista</h3>
+              <p className="text-[11px] text-zinc-500">
+                Cole CNPJs com ou sem máscara, ou até texto misturado.
+              </p>
+
+              <textarea
+                placeholder="Cole os CNPJs aqui..."
+                className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-40 outline-none border border-zinc-800 text-white"
+                value={cnpjBusca}
+                onChange={(e) => setCnpjBusca(e.target.value)}
+              />
+
+              <button
+                onClick={buscarECadastrarCNPJs}
+                className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm text-white shadow-lg active:scale-95 transition-all"
+              >
+                PESCAR E SALVAR
+              </button>
+            </div>
           </div>
         )}
       </main>
