@@ -204,7 +204,7 @@ export default function VendedorTRR_Master() {
             )}
             <div className="flex justify-between items-center px-1">
               <p className="text-[10px] text-zinc-400 font-black uppercase tracking-widest">
-                {leadsFiltrados.length} Filtrados de {totalAbsoluto} CNPJs no Banco
+                {totalAbsoluto} CNPJs
               </p>
               {statusProcesso && <p className="text-[9px] text-blue-500 animate-pulse font-black uppercase italic">{statusProcesso}</p>}
             </div>
@@ -212,9 +212,9 @@ export default function VendedorTRR_Master() {
         )}
       </header>
 
-      <main className="px-4 mt-6 text-white">
+      <main className="px-4 mt-6">
         {moduloAtivo === 'todo' && (
-          <div className="bg-zinc-900/30 border border-white/5 rounded-2xl divide-y divide-zinc-800/50 text-white">
+          <div className="bg-zinc-900/30 border border-white/5 rounded-2xl divide-y divide-zinc-800/50">
             {carregando ? <div className="text-center py-20 text-[10px] animate-pulse text-zinc-600 font-black uppercase tracking-widest">Sincronizando...</div> :
             leadsFiltrados.map(lead => (
               <div key={lead.cnpj} className="py-4 px-4 flex justify-between items-center gap-3 hover:bg-zinc-800/40 transition-colors">
@@ -235,6 +235,7 @@ export default function VendedorTRR_Master() {
         {moduloAtivo === 'arquivo' && <div className="bg-zinc-900 p-12 rounded-3xl border border-dashed border-zinc-800 text-center max-w-2xl mx-auto"><input type="file" onChange={extrairEPesquisar} className="text-xs mb-4 w-full text-zinc-400" /></div>}
         {moduloAtivo === 'cnpj' && <div className="max-w-2xl mx-auto space-y-4 text-white"><textarea placeholder="Cole CNPJs..." className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-40 outline-none border border-zinc-800 text-white" value={cnpjBusca} onChange={(e) => setCnpjBusca(e.target.value)} /><button onClick={async () => { const lista = cnpjBusca.match(/\d{14}/g) || []; for (const c of lista) { await processarCNPJ(c, {fonte_lead: "Busca Manual"}); } setCnpjBusca(''); sincronizar(); }} className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm text-white">PESQUISAR E SALVAR</button></div>}
       </main>
+
       <nav className="fixed bottom-6 left-6 right-6 h-16 bg-zinc-900/90 backdrop-blur-md border border-white/10 rounded-full px-8 flex justify-around items-center z-50 shadow-2xl">
         {['estoque', 'triagem'].map(a => <button key={a} onClick={() => setAba(a)} className={`text-[11px] font-black uppercase tracking-widest ${aba === a ? 'text-blue-500' : 'text-zinc-600'}`}>{a}</button>)}
       </nav>
