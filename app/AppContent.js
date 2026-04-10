@@ -30,13 +30,15 @@ const FILTROS_INICIAIS = {
   cnae_secundario: 'Todos'
 };
 
-const CAMPOS_FILTRO = [
-  { label: 'Razão Social', campo: 'razao_social' },
-  { label: 'Nome Fantasia', campo: 'nome_fantasia' },
-  { label: 'CNPJ', campo: 'cnpj' },
-  { label: 'Bairro', campo: 'bairro' },
-  { label: 'Fonte', campo: 'fonte_lead' },
-  { label: 'CNAE Principal', campo: 'cnae_principal_descricao' }
+const CAMPOS_FILTRO = [$1];
+
+const CAMPOS_COM_BUSCA_EXATA = [
+  'razao_social',
+  'nome_fantasia',
+  'cnpj',
+  'bairro',
+  'fonte_lead',
+  'cnae_principal_descricao'
 ];
 
 const ITENS_POR_PAGINA = 50;
@@ -71,10 +73,17 @@ const gerarIndiceBusca = (lead) => {
     .join(' ');
 };
 
-const enriquecerLeadParaBusca = (lead) => ({
-  ...lead,
-  _busca: gerarIndiceBusca(lead)
-});
+const enriquecerLeadParaBusca = (lead) => {
+  const leadBase = {
+    ...lead,
+    cnpj_normalizado: normalizarCNPJ(lead.cnpj)
+  };
+
+  return {
+    ...leadBase,
+    _busca: gerarIndiceBusca(leadBase)
+  };
+};
 
 const lerArquivoComoTexto = async (file) => {
   return new Promise((resolve, reject) => {
@@ -124,6 +133,7 @@ export default function VendedorTRR_Master() {
   const [ultimosCnpjsFalhados, setUltimosCnpjsFalhados] = useState([]);
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [filtrosAtivos, setFiltrosAtivos] = useState(FILTROS_INICIAIS);
+  const [buscaDebounced, setBuscaDebounced] = useState('');
 
   const limparMensagens = useCallback(() => {
     setResultadoBusca('');
@@ -300,55 +310,82 @@ export default function VendedorTRR_Master() {
     sincronizar();
   }, [sincronizar]);
 
-  const leadsFiltrados = useMemo(() => {
-    const texto = buscaGlobal.toLowerCase();
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setBuscaDebounced(buscaGlobal.trim().toLowerCase());
+    }, 250);
 
-    return leads.filter((lead) => {
-      const matchRazao =
-        filtrosAtivos.razao_social === 'Todos' ||
-        lead.razao_social === filtrosAtivos.razao_social;
+    return () => clearTimeout(timeout);
+  }, [buscaGlobal]);
 
-      const matchFantasia =
-        filtrosAtivos.nome_fantasia === 'Todos' ||
-        lead.nome_fantasia === filtrosAtivos.nome_fantasia;
+  const opcoesFiltros = useMemo(() => {
+    const opcoes = {};
 
-      const matchCNPJ =
-        filtrosAtivos.cnpj === 'Todos' ||
-        lead.cnpj === filtrosAtivos.cnpj;
-
-      const matchBairro =
-        filtrosAtivos.bairro === 'Todos' ||
-        lead.bairro === filtrosAtivos.bairro;
-
-      const matchFonte =
-        filtrosAtivos.fonte_lead === 'Todos' ||
-        lead.fonte_lead === filtrosAtivos.fonte_lead;
-
-      const matchCnaeP =
-        filtrosAtivos.cnae_principal_descricao === 'Todos' ||
-        lead.cnae_principal_descricao === filtrosAtivos.cnae_principal_descricao;
-
-      const matchCnaeS =
-        filtrosAtivos.cnae_secundario === 'Todos' ||
-        (lead.cnae_secundario &&
-          lead.cnae_secundario.includes(filtrosAtivos.cnae_secundario));
-
-      const matchBusca =
-        !buscaGlobal ||
-        (lead._busca && lead._busca.includes(texto));
-
-      return (
-        matchRazao &&
-        matchFantasia &&
-        matchCNPJ &&
-        matchBairro &&
-        matchFonte &&
-        matchCnaeP &&
-        matchCnaeS &&
-        matchBusca
-      );
+    CAMPOS_COM_BUSCA_EXATA.forEach((campo) => {
+      opcoes[campo] = ['Todos', ...new Set(leads.map((lead) => lead[campo]).filter(Boolean))].sort();
     });
-  }, [leads, filtrosAtivos, buscaGlobal]);
+
+    return opcoes;
+  }, [leads]);
+
+  const leadsFiltrados = useMemo(() => {
+    return leads.filter((lead) => {
+      if (
+        filtrosAtivos.razao_social !== 'Todos' &&
+        lead.razao_social !== filtrosAtivos.razao_social
+      ) {
+        return false;
+      }
+
+      if (
+        filtrosAtivos.nome_fantasia !== 'Todos' &&
+        lead.nome_fantasia !== filtrosAtivos.nome_fantasia
+      ) {
+        return false;
+      }
+
+      if (
+        filtrosAtivos.cnpj !== 'Todos' &&
+        lead.cnpj !== filtrosAtivos.cnpj
+      ) {
+        return false;
+      }
+
+      if (
+        filtrosAtivos.bairro !== 'Todos' &&
+        lead.bairro !== filtrosAtivos.bairro
+      ) {
+        return false;
+      }
+
+      if (
+        filtrosAtivos.fonte_lead !== 'Todos' &&
+        lead.fonte_lead !== filtrosAtivos.fonte_lead
+      ) {
+        return false;
+      }
+
+      if (
+        filtrosAtivos.cnae_principal_descricao !== 'Todos' &&
+        lead.cnae_principal_descricao !== filtrosAtivos.cnae_principal_descricao
+      ) {
+        return false;
+      }
+
+      if (
+        filtrosAtivos.cnae_secundario !== 'Todos' &&
+        !(lead.cnae_secundario && lead.cnae_secundario.includes(filtrosAtivos.cnae_secundario))
+      ) {
+        return false;
+      }
+
+      if (buscaDebounced && !(lead._busca && lead._busca.includes(buscaDebounced))) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [leads, filtrosAtivos, buscaDebounced]);
 
   const totalPaginas = useMemo(() => {
     return Math.max(1, Math.ceil(leadsFiltrados.length / ITENS_POR_PAGINA));
@@ -371,7 +408,7 @@ export default function VendedorTRR_Master() {
 
   useEffect(() => {
     setPaginaAtual(1);
-  }, [buscaGlobal, filtrosAtivos, aba, moduloAtivo]);
+  }, [buscaDebounced, filtrosAtivos, aba, moduloAtivo]);
 
   useEffect(() => {
     if (paginaAtual > totalPaginas) {
@@ -379,10 +416,6 @@ export default function VendedorTRR_Master() {
     }
   }, [paginaAtual, totalPaginas]);
 
-  const obterOpcoes = useCallback((campo) => {
-    const opcoes = [...new Set(leads.map((l) => l[campo]).filter(Boolean))].sort();
-    return ['Todos', ...opcoes];
-  }, [leads]);
 
   const moverLead = useCallback(async (lead) => {
     await supabase
@@ -713,7 +746,7 @@ export default function VendedorTRR_Master() {
                       onChange={(e) => atualizarFiltro(filtro.campo, e.target.value)}
                       className="bg-zinc-800 text-[11px] p-2.5 rounded-lg text-white outline-none"
                     >
-                      {obterOpcoes(filtro.campo).map((opt) => (
+                      {(opcoesFiltros[filtro.campo] || ['Todos']).map((opt) => (
                         <option key={opt} value={opt}>
                           {opt}
                         </option>
@@ -740,6 +773,12 @@ export default function VendedorTRR_Master() {
                 <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">
                   {leadsFiltrados.length} na tela
                 </p>
+
+                {!carregando && buscaGlobal !== buscaDebounced && (
+                  <p className="text-[10px] text-blue-500 font-black uppercase tracking-widest animate-pulse">
+                    Atualizando busca...
+                  </p>
+                )}
 
                 {!carregando && leadsFiltrados.length > 0 && (
                   <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">
