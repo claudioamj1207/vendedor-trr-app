@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import { consultarCNPJNaBrasilAPI } from '../lib/brasilApi';
 import * as XLSX from 'xlsx';
 
 export default function VendedorTRR_Master() {
@@ -154,57 +155,49 @@ export default function VendedorTRR_Master() {
       return { ok: false, erro: "CNPJ inválido" };
     }
 
-    try {
-      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
+    const consulta = await consultarCNPJNaBrasilAPI(cnpjLimpo);
 
-      if (!res.ok) {
-        return { ok: false, erro: `Falha na consulta da Receita para ${cnpjLimpo}` };
-      }
-
-      const info = await res.json();
-
-      if (!info?.cnpj) {
-        return { ok: false, erro: `CNPJ não encontrado: ${cnpjLimpo}` };
-      }
-
-      const descSec = info.cnaes_secundarios
-        ? info.cnaes_secundarios.map((c) => c.descricao).join(' | ')
-        : 'Não informado';
-
-      const { error } = await supabase
-        .from('empresas_mestre')
-        .upsert(
-          {
-            ...leadExistente,
-            cnpj: cnpjLimpo,
-            razao_social: info.razao_social || '',
-            nome_fantasia: info.nome_fantasia || info.razao_social || '',
-            logradouro: info.logradouro || '',
-            numero: info.numero || '',
-            bairro: info.bairro || '',
-            municipio: info.municipio || '',
-            uf: info.uf || '',
-            cnae_principal_codigo: info.cnae_fiscal ? String(info.cnae_fiscal) : '',
-            cnae_principal_descricao: info.cnae_fiscal_descricao || 'Não informado',
-            cnae_secundario: descSec,
-            situacao_cadastral: info.descricao_situacao_cadastral || 'ATIVA',
-            status_lead: leadExistente.status_lead || 'Novo',
-            fonte_lead: leadExistente.fonte_lead || 'Busca Manual'
-          },
-          { onConflict: 'cnpj' }
-        );
-
-      if (error) {
-        return { ok: false, erro: `Erro ao salvar no banco: ${error.message}` };
-      }
-
-      return {
-        ok: true,
-        situacao: info.descricao_situacao_cadastral
-      };
-    } catch (err) {
-      return { ok: false, erro: "Falha de conexão com a API da Receita" };
+    if (!consulta.ok) {
+      return { ok: false, erro: consulta.erro };
     }
+
+    const info = consulta.dados;
+
+    const descSec = info.cnaes_secundarios
+      ? info.cnaes_secundarios.map((c) => c.descricao).join(' | ')
+      : 'Não informado';
+
+    const { error } = await supabase
+      .from('empresas_mestre')
+      .upsert(
+        {
+          ...leadExistente,
+          cnpj: cnpjLimpo,
+          razao_social: info.razao_social || '',
+          nome_fantasia: info.nome_fantasia || info.razao_social || '',
+          logradouro: info.logradouro || '',
+          numero: info.numero || '',
+          bairro: info.bairro || '',
+          municipio: info.municipio || '',
+          uf: info.uf || '',
+          cnae_principal_codigo: info.cnae_fiscal ? String(info.cnae_fiscal) : '',
+          cnae_principal_descricao: info.cnae_fiscal_descricao || 'Não informado',
+          cnae_secundario: descSec,
+          situacao_cadastral: info.descricao_situacao_cadastral || 'ATIVA',
+          status_lead: leadExistente.status_lead || 'Novo',
+          fonte_lead: leadExistente.fonte_lead || 'Busca Manual'
+        },
+        { onConflict: 'cnpj' }
+      );
+
+    if (error) {
+      return { ok: false, erro: `Erro ao salvar no banco: ${error.message}` };
+    }
+
+    return {
+      ok: true,
+      situacao: info.descricao_situacao_cadastral
+    };
   };
 
   const limparInativos = async () => {
