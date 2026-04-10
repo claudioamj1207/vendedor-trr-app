@@ -1,13 +1,117 @@
 "use client";
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { consultarCNPJNaBrasilAPI } from '../lib/brasilApi';
 import * as XLSX from 'xlsx';
 
+const STATUS_LEAD = {
+  NOVO: 'Novo',
+  TRIAGEM: 'Triagem',
+  EM_PROSPECCAO: 'Em Prospecção'
+};
+
+const MODULOS = {
+  TODO: 'todo',
+  PESCARIA: 'pescaria'
+};
+
+const ABAS = {
+  ESTOQUE: 'estoque',
+  TRIAGEM: 'triagem'
+};
+
+const FILTROS_INICIAIS = {
+  razao_social: 'Todos',
+  nome_fantasia: 'Todos',
+  cnpj: 'Todos',
+  bairro: 'Todos',
+  fonte_lead: 'Todos',
+  cnae_principal_descricao: 'Todos',
+  cnae_secundario: 'Todos'
+};
+
+const CAMPOS_FILTRO = [
+  { label: 'Razão Social', campo: 'razao_social' },
+  { label: 'Nome Fantasia', campo: 'nome_fantasia' },
+  { label: 'CNPJ', campo: 'cnpj' },
+  { label: 'Bairro', campo: 'bairro' },
+  { label: 'Fonte', campo: 'fonte_lead' },
+  { label: 'CNAE Principal', campo: 'cnae_principal_descricao' }
+];
+
+const ITENS_POR_PAGINA = 50;
+
+const normalizarCNPJ = (cnpj) => String(cnpj || '').replace(/\D/g, '');
+
+const formatarCNPJ = (cnpj) => {
+  const limpo = normalizarCNPJ(cnpj);
+  if (limpo.length !== 14) return cnpj;
+  return limpo.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+};
+
+const extrairCNPJsDoTexto = (texto) => {
+  if (!texto) return [];
+
+  const regex = /\d{2}[.\s,/-]?\d{3}[.\s,/-]?\d{3}[\/\s-]?\d{4}[-\s]?\d{2}|\d{14}/g;
+  const encontrados = texto.match(regex) || [];
+
+  return [
+    ...new Set(
+      encontrados
+        .map((item) => normalizarCNPJ(item))
+        .filter((cnpj) => cnpj.length === 14)
+    )
+  ];
+};
+
+const gerarIndiceBusca = (lead) => {
+  return Object.entries(lead)
+    .filter(([chave]) => chave !== '_busca')
+    .map(([, valor]) => String(valor || '').toLowerCase())
+    .join(' ');
+};
+
+const enriquecerLeadParaBusca = (lead) => ({
+  ...lead,
+  _busca: gerarIndiceBusca(lead)
+});
+
+const lerArquivoComoTexto = async (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = (evt) => {
+      try {
+        let textoBruto = '';
+
+        if (file.name.toLowerCase().endsWith('.xlsx')) {
+          const workbook = XLSX.read(evt.target.result, { type: 'binary' });
+          const primeiraAba = workbook.Sheets[workbook.SheetNames[0]];
+          textoBruto = JSON.stringify(XLSX.utils.sheet_to_json(primeiraAba));
+        } else {
+          textoBruto = evt.target.result;
+        }
+
+        resolve(textoBruto);
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    reader.onerror = () => reject(new Error('Erro ao ler arquivo.'));
+
+    if (file.name.toLowerCase().endsWith('.xlsx')) {
+      reader.readAsBinaryString(file);
+    } else {
+      reader.readAsText(file);
+    }
+  });
+};
+
 export default function VendedorTRR_Master() {
   const [leads, setLeads] = useState([]);
-  const [aba, setAba] = useState('estoque');
-  const [moduloAtivo, setModuloAtivo] = useState('todo');
+  const [aba, setAba] = useState(ABAS.ESTOQUE);
+  const [moduloAtivo, setModuloAtivo] = useState(MODULOS.TODO);
   const [buscaGlobal, setBuscaGlobal] = useState('');
   const [cnpjBusca, setCnpjBusca] = useState('');
   const [carregando, setCarregando] = useState(true);
@@ -18,47 +122,32 @@ export default function VendedorTRR_Master() {
   const [totalAbsoluto, setTotalAbsoluto] = useState(0);
   const [ultimosCnpjsProcessados, setUltimosCnpjsProcessados] = useState([]);
   const [ultimosCnpjsFalhados, setUltimosCnpjsFalhados] = useState([]);
+  const [paginaAtual, setPaginaAtual] = useState(1);
+  const [filtrosAtivos, setFiltrosAtivos] = useState(FILTROS_INICIAIS);
 
-  const [filtrosAtivos, setFiltrosAtivos] = useState({
-    razao_social: 'Todos',
-    nome_fantasia: 'Todos',
-    cnpj: 'Todos',
-    bairro: 'Todos',
-    fonte_lead: 'Todos',
-    cnae_principal_descricao: 'Todos',
-    cnae_secundario: 'Todos'
-  });
+  const limparMensagens = useCallback(() => {
+    setResultadoBusca('');
+    setErroBusca('');
+  }, []);
 
-  const gerarIndiceBusca = (lead) => {
-    return Object.values(lead)
-      .map((v) => String(v || '').toLowerCase())
-      .join(' ');
-  };
+  const resetarEstadoPescaria = useCallback(() => {
+    setStatusProcesso('');
+    setUltimosCnpjsProcessados([]);
+    setUltimosCnpjsFalhados([]);
+  }, []);
 
-  const extrairCNPJsDoTexto = (texto) => {
-    if (!texto) return [];
+  const atualizarFiltro = useCallback((campo, valor) => {
+    setFiltrosAtivos((prev) => ({
+      ...prev,
+      [campo]: valor
+    }));
+  }, []);
 
-    const regex = /\d{2}[.\s,/-]?\d{3}[.\s,/-]?\d{3}[\/\s-]?\d{4}[-\s]?\d{2}|\d{14}/g;
-    const encontrados = texto.match(regex) || [];
+  const limparFiltros = useCallback(() => {
+    setFiltrosAtivos(FILTROS_INICIAIS);
+  }, []);
 
-    return [
-      ...new Set(
-        encontrados
-          .map((item) => String(item).replace(/\D/g, ''))
-          .filter((cnpj) => cnpj.length === 14)
-      )
-    ];
-  };
-
-  const formatarCNPJ = (cnpj) => {
-    const limpo = String(cnpj || '').replace(/\D/g, '');
-    if (limpo.length !== 14) return cnpj;
-    return limpo.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
-  };
-
-  const normalizarCNPJ = (cnpj) => String(cnpj || '').replace(/\D/g, '');
-
-  const processarEmLotes = async ({
+  const processarEmLotes = useCallback(async ({
     itens,
     tamanhoLote = 5,
     pausaMs = 300,
@@ -88,6 +177,7 @@ export default function VendedorTRR_Master() {
           if (resultado && resultado.erro) {
             ultimoErro = resultado.erro;
           }
+
           falhados.push({
             cnpj: cnpjDoItem,
             erro: resultado?.erro || 'Falha desconhecida'
@@ -102,9 +192,61 @@ export default function VendedorTRR_Master() {
 
     setStatusProcesso('');
     return { sucesso, ultimoErro, falhados };
-  };
+  }, []);
 
-  const sincronizar = async () => {
+  const processarCNPJ = useCallback(async (cnpj, leadExistente = {}) => {
+    const cnpjLimpo = normalizarCNPJ(cnpj);
+
+    if (cnpjLimpo.length !== 14) {
+      return { ok: false, erro: 'CNPJ inválido' };
+    }
+
+    const consulta = await consultarCNPJNaBrasilAPI(cnpjLimpo);
+
+    if (!consulta.ok) {
+      return { ok: false, erro: consulta.erro };
+    }
+
+    const info = consulta.dados;
+
+    const descSec = info.cnaes_secundarios
+      ? info.cnaes_secundarios.map((c) => c.descricao).join(' | ')
+      : 'Não informado';
+
+    const { error } = await supabase
+      .from('empresas_mestre')
+      .upsert(
+        {
+          ...leadExistente,
+          cnpj: cnpjLimpo,
+          razao_social: info.razao_social || '',
+          nome_fantasia: info.nome_fantasia || info.razao_social || '',
+          logradouro: info.logradouro || '',
+          numero: info.numero || '',
+          bairro: info.bairro || '',
+          municipio: info.municipio || '',
+          uf: info.uf || '',
+          cnae_principal_codigo: info.cnae_fiscal ? String(info.cnae_fiscal) : '',
+          cnae_principal_descricao: info.cnae_fiscal_descricao || 'Não informado',
+          cnae_secundario: descSec,
+          situacao_cadastral: info.descricao_situacao_cadastral || 'ATIVA',
+          status_lead: leadExistente.status_lead || STATUS_LEAD.NOVO,
+          fonte_lead: leadExistente.fonte_lead || 'Busca Manual'
+        },
+        { onConflict: 'cnpj' }
+      );
+
+    if (error) {
+      return { ok: false, erro: `Erro ao salvar no banco: ${error.message}` };
+    }
+
+    return {
+      ok: true,
+      situacao: info.descricao_situacao_cadastral
+    };
+  }, []);
+
+  const sincronizar = useCallback(async () => {
     try {
       setCarregando(true);
 
@@ -125,17 +267,16 @@ export default function VendedorTRR_Master() {
         const { data, error } = await supabase
           .from('empresas_mestre')
           .select('*')
-          .eq('status_lead', aba === 'estoque' ? 'Novo' : 'Triagem')
+          .eq(
+            'status_lead',
+            aba === ABAS.ESTOQUE ? STATUS_LEAD.NOVO : STATUS_LEAD.TRIAGEM
+          )
           .order('razao_social', { ascending: true })
           .range(de, ate);
 
         if (error) throw error;
 
-        const enriquecidos = (data || []).map((lead) => ({
-          ...lead,
-          _busca: gerarIndiceBusca(lead)
-        }));
-
+        const enriquecidos = (data || []).map(enriquecerLeadParaBusca);
         todosLeads = [...todosLeads, ...enriquecidos];
 
         if (!data || data.length < 1000) {
@@ -148,27 +289,709 @@ export default function VendedorTRR_Master() {
 
       setLeads(todosLeads);
     } catch (e) {
-      console.error("Erro na sincronização:", e);
+      console.error('Erro na sincronização:', e);
       setErroBusca(`Erro na sincronização: ${e.message || 'falha ao carregar dados.'}`);
     } finally {
       setCarregando(false);
     }
-  };
+  }, [aba]);
 
   useEffect(() => {
     sincronizar();
-  }, [aba]);
+  }, [sincronizar]);
 
   const leadsFiltrados = useMemo(() => {
     const texto = buscaGlobal.toLowerCase();
 
     return leads.filter((lead) => {
+      const matchRazao =
+        filtrosAtivos.razao_social === 'Todos' ||
+        lead.razao_social === filtrosAtivos.razao_social;
+
+      const matchFantasia =
+        filtrosAtivos.nome_fantasia === 'Todos' ||
+        lead.nome_fantasia === filtrosAtivos.nome_fantasia;
+
+      const matchCNPJ =
+        filtrosAtivos.cnpj === 'Todos' ||
+        lead.cnpj === filtrosAtivos.cnpj;
+
+      const matchBairro =
+        filtrosAtivos.bairro === 'Todos' ||
+        lead.bairro === filtrosAtivos.bairro;
+
+      const matchFonte =
+        filtrosAtivos.fonte_lead === 'Todos' ||
+        lead.fonte_lead === filtrosAtivos.fonte_lead;
+
+      const matchCnaeP =
+        filtrosAtivos.cnae_principal_descricao === 'Todos' ||
+        lead.cnae_principal_descricao === filtrosAtivos.cnae_principal_descricao;
+
+      const matchCnaeS =
+        filtrosAtivos.cnae_secundario === 'Todos' ||
+        (lead.cnae_secundario &&
+          lead.cnae_secundario.includes(filtrosAtivos.cnae_secundario));
+
       const matchBusca =
         !buscaGlobal ||
         (lead._busca && lead._busca.includes(texto));
 
-      return matchBusca;
+      return (
+        matchRazao &&
+        matchFantasia &&
+        matchCNPJ &&
+        matchBairro &&
+        matchFonte &&
+        matchCnaeP &&
+        matchCnaeS &&
+        matchBusca
+      );
     });
-  }, [leads, buscaGlobal]);
+  }, [leads, filtrosAtivos, buscaGlobal]);
 
-  // RESTANTE DO CÓDIGO PERMANECE IGUAL...
+  const totalPaginas = useMemo(() => {
+    return Math.max(1, Math.ceil(leadsFiltrados.length / ITENS_POR_PAGINA));
+  }, [leadsFiltrados.length]);
+
+  const leadsPaginados = useMemo(() => {
+    const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
+    const fim = inicio + ITENS_POR_PAGINA;
+    return leadsFiltrados.slice(inicio, fim);
+  }, [leadsFiltrados, paginaAtual]);
+
+  const paginaInicial = useMemo(() => {
+    if (leadsFiltrados.length === 0) return 0;
+    return (paginaAtual - 1) * ITENS_POR_PAGINA + 1;
+  }, [paginaAtual, leadsFiltrados.length]);
+
+  const paginaFinal = useMemo(() => {
+    return Math.min(paginaAtual * ITENS_POR_PAGINA, leadsFiltrados.length);
+  }, [paginaAtual, leadsFiltrados.length]);
+
+  useEffect(() => {
+    setPaginaAtual(1);
+  }, [buscaGlobal, filtrosAtivos, aba, moduloAtivo]);
+
+  useEffect(() => {
+    if (paginaAtual > totalPaginas) {
+      setPaginaAtual(totalPaginas);
+    }
+  }, [paginaAtual, totalPaginas]);
+
+  const obterOpcoes = useCallback((campo) => {
+    const opcoes = [...new Set(leads.map((l) => l[campo]).filter(Boolean))].sort();
+    return ['Todos', ...opcoes];
+  }, [leads]);
+
+  const moverLead = useCallback(async (lead) => {
+    await supabase
+      .from('empresas_mestre')
+      .update({
+        status_lead:
+          aba === ABAS.ESTOQUE ? STATUS_LEAD.TRIAGEM : STATUS_LEAD.EM_PROSPECCAO
+      })
+      .eq('cnpj', lead.cnpj);
+
+    await sincronizar();
+  }, [aba, sincronizar]);
+
+  const limparInativos = useCallback(async () => {
+    if (!confirm(`Limpar inativos e duplicados? Isso vai verificar ${leadsFiltrados.length} lead(s) da tela e depois limpar duplicidades no banco.`)) {
+      return;
+    }
+
+    limparMensagens();
+
+    let excluidosInativos = 0;
+    let excluidosDuplicados = 0;
+
+    try {
+      for (let i = 0; i < leadsFiltrados.length; i++) {
+        const lead = leadsFiltrados[i];
+        setStatusProcesso(`Verificando ativos ${i + 1} de ${leadsFiltrados.length}: ${lead.razao_social}`);
+
+        const resultado = await processarCNPJ(lead.cnpj, lead);
+
+        if (resultado && resultado.ok && resultado.situacao !== 'ATIVA') {
+          await supabase.from('empresas_mestre').delete().eq('cnpj', lead.cnpj);
+          excluidosInativos++;
+        }
+
+        await new Promise((r) => setTimeout(r, 450));
+      }
+
+      setStatusProcesso('Verificando duplicados no banco...');
+
+      const { data: todosRegistros, error: erroBuscaDuplicados } = await supabase
+        .from('empresas_mestre')
+        .select('id, cnpj')
+        .order('id', { ascending: true });
+
+      if (erroBuscaDuplicados) {
+        throw erroBuscaDuplicados;
+      }
+
+      if (!todosRegistros || todosRegistros.length === 0) {
+        setStatusProcesso('');
+        setResultadoBusca(`Limpeza concluída: ${excluidosInativos} inativo(s) removido(s) e 0 duplicado(s) removido(s).`);
+        await sincronizar();
+        return;
+      }
+
+      const semId = todosRegistros.some((item) => item.id === undefined || item.id === null);
+      if (semId) {
+        throw new Error('A tabela empresas_mestre precisa ter a coluna id para limpar duplicados com segurança.');
+      }
+
+      const mapa = new Map();
+      const idsParaExcluir = [];
+
+      for (const registro of todosRegistros) {
+        const cnpjNormalizado = normalizarCNPJ(registro.cnpj);
+
+        if (!cnpjNormalizado || cnpjNormalizado.length !== 14) {
+          continue;
+        }
+
+        if (!mapa.has(cnpjNormalizado)) {
+          mapa.set(cnpjNormalizado, registro.id);
+        } else {
+          idsParaExcluir.push(registro.id);
+        }
+      }
+
+      if (idsParaExcluir.length > 0) {
+        for (let i = 0; i < idsParaExcluir.length; i += 100) {
+          const loteIds = idsParaExcluir.slice(i, i + 100);
+
+          setStatusProcesso(`Removendo duplicados ${Math.min(i + loteIds.length, idsParaExcluir.length)} de ${idsParaExcluir.length}...`);
+
+          const { error: erroDeleteDuplicados } = await supabase
+            .from('empresas_mestre')
+            .delete()
+            .in('id', loteIds);
+
+          if (erroDeleteDuplicados) {
+            throw erroDeleteDuplicados;
+          }
+        }
+
+        excluidosDuplicados = idsParaExcluir.length;
+      }
+
+      setStatusProcesso('');
+      setResultadoBusca(
+        `Limpeza concluída: ${excluidosInativos} inativo(s) removido(s) e ${excluidosDuplicados} duplicado(s) removido(s).`
+      );
+
+      await sincronizar();
+    } catch (err) {
+      console.error('Erro na limpeza:', err);
+      setStatusProcesso('');
+      setErroBusca(`Erro na limpeza: ${err.message || 'falha ao limpar registros.'}`);
+    }
+  }, [leadsFiltrados, limparMensagens, processarCNPJ, sincronizar]);
+
+  const atualizarFaltantes = useCallback(async () => {
+    limparMensagens();
+
+    const { data: faltantes, error } = await supabase
+      .from('empresas_mestre')
+      .select('*')
+      .or('cnae_principal_descricao.is.null,cnae_secundario.is.null,cnae_principal_descricao.eq.""');
+
+    if (error) {
+      setErroBusca(`Erro ao localizar faltantes: ${error.message}`);
+      return;
+    }
+
+    if (!faltantes || faltantes.length === 0) {
+      alert('Dados completos!');
+      return;
+    }
+
+    if (!confirm(`Atualizar ${faltantes.length} leads?`)) {
+      return;
+    }
+
+    for (let i = 0; i < faltantes.length; i++) {
+      const lead = faltantes[i];
+      setStatusProcesso(`Atualizando ${i + 1} de ${faltantes.length}`);
+      await processarCNPJ(lead.cnpj, lead);
+      await new Promise((r) => setTimeout(r, 450));
+    }
+
+    setStatusProcesso('');
+    setResultadoBusca(`${faltantes.length} lead(s) reprocessado(s).`);
+    await sincronizar();
+  }, [limparMensagens, processarCNPJ, sincronizar]);
+
+  const extrairEPesquisar = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    limparMensagens();
+    setUltimosCnpjsProcessados([]);
+    setUltimosCnpjsFalhados([]);
+    setStatusProcesso('Lendo arquivo...');
+
+    try {
+      const textoBruto = await lerArquivoComoTexto(file);
+      const cnpjs = extrairCNPJsDoTexto(textoBruto);
+
+      if (cnpjs.length === 0) {
+        setStatusProcesso('');
+        setErroBusca('Nenhum CNPJ válido foi encontrado no arquivo.');
+        return;
+      }
+
+      setUltimosCnpjsProcessados(cnpjs);
+
+      const { sucesso, ultimoErro, falhados } = await processarEmLotes({
+        itens: cnpjs,
+        tamanhoLote: 5,
+        pausaMs: 300,
+        mensagemProgresso: (processados, total) =>
+          `Processando arquivo: ${processados} de ${total}...`,
+        processador: async (cnpj) =>
+          processarCNPJ(cnpj, { fonte_lead: `Arquivo: ${file.name}` })
+      });
+
+      setUltimosCnpjsFalhados(falhados);
+
+      if (sucesso === 0 && ultimoErro) {
+        setErroBusca(`Erro no processamento: ${ultimoErro}`);
+      } else if (ultimoErro) {
+        setResultadoBusca(`Arquivo concluído: ${sucesso} empresa(s) salva(s). Falha em ${falhados.length} CNPJ(s).`);
+      } else {
+        setResultadoBusca(`Arquivo concluído: ${sucesso} empresa(s) salva(s).`);
+      }
+
+      await sincronizar();
+    } catch (err) {
+      setStatusProcesso('');
+      setErroBusca('Erro ao ler o arquivo.');
+    } finally {
+      e.target.value = '';
+    }
+  }, [limparMensagens, processarEmLotes, processarCNPJ, sincronizar]);
+
+  const buscarECadastrarCNPJs = useCallback(async () => {
+    limparMensagens();
+    setUltimosCnpjsFalhados([]);
+
+    const cnpjs = extrairCNPJsDoTexto(cnpjBusca);
+
+    if (cnpjs.length === 0) {
+      setErroBusca('Nenhum CNPJ válido foi encontrado no texto digitado.');
+      return;
+    }
+
+    setUltimosCnpjsProcessados(cnpjs);
+
+    const { sucesso, ultimoErro, falhados } = await processarEmLotes({
+      itens: cnpjs,
+      tamanhoLote: 5,
+      pausaMs: 300,
+      mensagemProgresso: (processados, total) =>
+        `Processando ${processados} de ${total}...`,
+      processador: async (cnpj) =>
+        processarCNPJ(cnpj, { fonte_lead: 'Busca Manual' })
+    });
+
+    setUltimosCnpjsFalhados(falhados);
+
+    if (sucesso === 0 && ultimoErro) {
+      setErroBusca(`Nenhum CNPJ foi salvo. Motivo: ${ultimoErro}`);
+      return;
+    }
+
+    if (ultimoErro) {
+      setResultadoBusca(`Salvos ${sucesso} de ${cnpjs.length}. Falha em ${falhados.length} CNPJ(s).`);
+    } else {
+      setResultadoBusca(`Sucesso: ${sucesso} CNPJ(s) salvo(s).`);
+    }
+
+    setCnpjBusca('');
+    await sincronizar();
+  }, [cnpjBusca, limparMensagens, processarEmLotes, processarCNPJ, sincronizar]);
+
+  const trocarModulo = useCallback((modulo) => {
+    setModuloAtivo(modulo);
+    limparMensagens();
+    resetarEstadoPescaria();
+  }, [limparMensagens, resetarEstadoPescaria]);
+
+  const irParaPagina = useCallback((pagina) => {
+    if (pagina < 1 || pagina > totalPaginas) return;
+    setPaginaAtual(pagina);
+  }, [totalPaginas]);
+
+  return (
+    <div className="min-h-screen bg-black text-white pb-40 font-sans antialiased">
+      <header className="px-5 pt-8 pb-4 sticky top-0 bg-black/95 border-b border-white/5 z-50">
+        <div className="flex justify-between items-center mb-2">
+          <h1 className="text-[10px] font-black text-blue-500 uppercase italic tracking-widest">
+            Vendedor TRR
+          </h1>
+
+          <div className="flex gap-3 text-[9px] font-bold uppercase">
+            {[MODULOS.TODO, MODULOS.PESCARIA].map((m) => (
+              <button
+                key={m}
+                onClick={() => trocarModulo(m)}
+                className={
+                  moduloAtivo === m
+                    ? 'text-white border-b border-blue-500'
+                    : 'text-zinc-600'
+                }
+              >
+                {m === MODULOS.TODO ? 'LISTA' : 'PESCARIA DE CNPJ'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center gap-3">
+          <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">
+            {moduloAtivo === MODULOS.TODO
+              ? aba === ABAS.TRIAGEM
+                ? 'Triagem'
+                : 'Estoque'
+              : 'Pescaria de CNPJ'}
+          </h2>
+
+          <div className="flex gap-2 flex-wrap justify-end">
+            {moduloAtivo === MODULOS.TODO && (
+              <>
+                <button
+                  onClick={limparInativos}
+                  className="text-[9px] bg-red-600 px-4 py-2 rounded-full font-bold"
+                >
+                  🗑️ LIMPAR
+                </button>
+
+                <button
+                  onClick={atualizarFaltantes}
+                  className="text-[9px] bg-emerald-600 px-4 py-2 rounded-full font-bold"
+                >
+                  🔄 ENRIQUECER
+                </button>
+              </>
+            )}
+
+            <button
+              onClick={() => setMostrarFiltros(!mostrarFiltros)}
+              className="text-[9px] bg-zinc-800 px-4 py-2 rounded-full font-bold border border-white/10"
+            >
+              FILTROS
+            </button>
+          </div>
+        </div>
+
+        {moduloAtivo === MODULOS.TODO && (
+          <div className="mt-4 space-y-3">
+            <input
+              type="text"
+              placeholder="Busca rápida..."
+              className="w-full bg-zinc-900 p-3 rounded-xl text-xs outline-none border border-zinc-800 text-white"
+              value={buscaGlobal}
+              onChange={(e) => setBuscaGlobal(e.target.value)}
+            />
+
+            {mostrarFiltros && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4 bg-zinc-900 rounded-2xl border border-white/5">
+                {CAMPOS_FILTRO.map((filtro) => (
+                  <div key={filtro.campo} className="flex flex-col gap-1">
+                    <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">
+                      {filtro.label}
+                    </label>
+
+                    <select
+                      value={filtrosAtivos[filtro.campo]}
+                      onChange={(e) => atualizarFiltro(filtro.campo, e.target.value)}
+                      className="bg-zinc-800 text-[11px] p-2.5 rounded-lg text-white outline-none"
+                    >
+                      {obterOpcoes(filtro.campo).map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+
+                <button
+                  onClick={limparFiltros}
+                  className="lg:col-span-3 text-[9px] font-bold text-red-500 uppercase py-2 bg-red-500/10 rounded-lg"
+                >
+                  Limpar Filtros
+                </button>
+              </div>
+            )}
+
+            <div className="flex justify-between items-center px-1 gap-3 flex-wrap">
+              <div className="flex gap-4 items-center flex-wrap">
+                <p className="text-[10px] text-zinc-400 font-black uppercase tracking-widest">
+                  {totalAbsoluto} CNPJs no banco
+                </p>
+
+                <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">
+                  {leadsFiltrados.length} na tela
+                </p>
+
+                {!carregando && leadsFiltrados.length > 0 && (
+                  <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">
+                    Mostrando {paginaInicial}-{paginaFinal}
+                  </p>
+                )}
+              </div>
+
+              {statusProcesso && (
+                <p className="text-[9px] text-blue-500 animate-pulse font-black uppercase italic">
+                  {statusProcesso}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </header>
+
+      <main className="px-4 mt-6">
+        {resultadoBusca && (
+          <div className="bg-emerald-900/30 border border-emerald-500/50 p-4 rounded-2xl mb-6 flex justify-between items-center text-emerald-400 text-xs font-bold animate-pulse gap-3">
+            <span>✅ {resultadoBusca}</span>
+            <button
+              onClick={() => setResultadoBusca('')}
+              className="bg-emerald-500/20 px-3 py-1 rounded-full text-[10px]"
+            >
+              OK
+            </button>
+          </div>
+        )}
+
+        {erroBusca && (
+          <div className="bg-red-900/30 border border-red-500/50 p-4 rounded-2xl mb-6 flex justify-between items-center text-red-400 text-xs font-bold animate-pulse gap-3">
+            <span>❌ {erroBusca}</span>
+            <button
+              onClick={() => setErroBusca('')}
+              className="bg-red-500/20 px-3 py-1 rounded-full text-[10px]"
+            >
+              OK
+            </button>
+          </div>
+        )}
+
+        {moduloAtivo === MODULOS.TODO && (
+          <>
+            <div className="bg-zinc-900/30 border border-white/5 rounded-2xl divide-y divide-zinc-800/50">
+              {carregando ? (
+                <div className="text-center py-20 text-[10px] animate-pulse text-zinc-600 font-black uppercase tracking-widest">
+                  Sincronizando...
+                </div>
+              ) : leadsFiltrados.length === 0 ? (
+                <div className="text-center py-20 text-[10px] text-zinc-600 font-black uppercase tracking-widest">
+                  Nenhum lead encontrado
+                </div>
+              ) : (
+                leadsPaginados.map((lead) => (
+                  <div
+                    key={lead.cnpj}
+                    className="py-4 px-4 flex justify-between items-center gap-3 hover:bg-zinc-800/40 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-[12px] font-bold uppercase truncate text-white leading-tight">
+                        {lead.razao_social}
+                      </h3>
+
+                      <div className="flex gap-2 mt-2 flex-wrap">
+                        <span className="text-[8px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 font-bold border border-white/5 uppercase">
+                          {lead.bairro}
+                        </span>
+
+                        <span className="text-[8px] bg-blue-900/20 px-2 py-0.5 rounded text-blue-400 font-bold border border-blue-500/10 uppercase">
+                          {lead.cnpj}
+                        </span>
+
+                        <span className="text-[8px] bg-orange-900/20 px-2 py-0.5 rounded text-orange-400 font-bold border border-orange-500/10 truncate max-w-[200px]">
+                          {lead.cnae_principal_descricao || 'SEM CNAE'}
+                        </span>
+
+                        {lead.cnae_secundario && (
+                          <span className="text-[8px] bg-zinc-900/50 px-2 py-0.5 rounded text-zinc-500 font-medium truncate max-w-[200px] italic text-white">
+                            Sec: {lead.cnae_secundario}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => moverLead(lead)}
+                      className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center text-white active:scale-95 transition-all"
+                    >
+                      ➡️
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {!carregando && leadsFiltrados.length > 0 && totalPaginas > 1 && (
+              <div className="mt-6 bg-zinc-900/50 border border-white/5 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="text-[10px] text-zinc-400 font-black uppercase tracking-widest">
+                  Página {paginaAtual} de {totalPaginas}
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap justify-center">
+                  <button
+                    onClick={() => irParaPagina(1)}
+                    disabled={paginaAtual === 1}
+                    className="px-3 py-2 rounded-xl text-[10px] font-black bg-zinc-800 border border-white/10 text-white disabled:opacity-30"
+                  >
+                    Primeira
+                  </button>
+
+                  <button
+                    onClick={() => irParaPagina(paginaAtual - 1)}
+                    disabled={paginaAtual === 1}
+                    className="px-3 py-2 rounded-xl text-[10px] font-black bg-zinc-800 border border-white/10 text-white disabled:opacity-30"
+                  >
+                    Anterior
+                  </button>
+
+                  <button
+                    onClick={() => irParaPagina(paginaAtual + 1)}
+                    disabled={paginaAtual === totalPaginas}
+                    className="px-3 py-2 rounded-xl text-[10px] font-black bg-zinc-800 border border-white/10 text-white disabled:opacity-30"
+                  >
+                    Próxima
+                  </button>
+
+                  <button
+                    onClick={() => irParaPagina(totalPaginas)}
+                    disabled={paginaAtual === totalPaginas}
+                    className="px-3 py-2 rounded-xl text-[10px] font-black bg-zinc-800 border border-white/10 text-white disabled:opacity-30"
+                  >
+                    Última
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {moduloAtivo === MODULOS.PESCARIA && (
+          <div className="max-w-3xl mx-auto space-y-8">
+            <div className="bg-zinc-900 p-8 rounded-3xl border border-dashed border-zinc-800 text-center">
+              <h3 className="text-lg font-black uppercase mb-3 text-white">Upload de arquivo</h3>
+              <p className="text-[11px] text-zinc-500 mb-4">
+                Envie Excel (.xlsx), texto (.txt) ou PDF textual para pescar CNPJs.
+              </p>
+
+              <input
+                type="file"
+                onChange={extrairEPesquisar}
+                className="text-xs mb-4 w-full text-zinc-400"
+              />
+
+              {statusProcesso && (
+                <p className="mt-4 text-blue-500 text-[10px] animate-pulse font-bold uppercase">
+                  {statusProcesso}
+                </p>
+              )}
+            </div>
+
+            <div className="max-w-3xl mx-auto space-y-4 text-white">
+              <h3 className="text-lg font-black uppercase text-white">Colar texto ou lista</h3>
+              <p className="text-[11px] text-zinc-500">
+                Cole CNPJs com ou sem máscara, ou até texto misturado.
+              </p>
+
+              <textarea
+                placeholder="Cole os CNPJs aqui..."
+                className="w-full bg-zinc-900 p-4 rounded-2xl text-sm h-40 outline-none border border-zinc-800 text-white"
+                value={cnpjBusca}
+                onChange={(e) => setCnpjBusca(e.target.value)}
+              />
+
+              <button
+                onClick={buscarECadastrarCNPJs}
+                className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm text-white shadow-lg active:scale-95 transition-all"
+              >
+                PESCAR E SALVAR
+              </button>
+            </div>
+
+            {ultimosCnpjsProcessados.length > 0 && (
+              <div className="bg-zinc-900/70 border border-white/5 rounded-3xl p-6">
+                <div className="flex justify-between items-center mb-4 gap-4">
+                  <h3 className="text-lg font-black uppercase text-white">
+                    Última pesquisa
+                  </h3>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                    {ultimosCnpjsProcessados.length} CNPJ(s)
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {ultimosCnpjsProcessados.map((cnpj) => (
+                    <span
+                      key={cnpj}
+                      className="text-[10px] bg-blue-900/20 px-3 py-2 rounded-full text-blue-300 font-bold border border-blue-500/10"
+                    >
+                      {formatarCNPJ(cnpj)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {ultimosCnpjsFalhados.length > 0 && (
+              <div className="bg-red-900/20 border border-red-500/20 rounded-3xl p-6">
+                <div className="flex justify-between items-center mb-4 gap-4">
+                  <h3 className="text-lg font-black uppercase text-red-300">
+                    CNPJs com falha
+                  </h3>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-red-200">
+                    {ultimosCnpjsFalhados.length} falha(s)
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {ultimosCnpjsFalhados.map((item) => (
+                    <div
+                      key={`${item.cnpj}-${item.erro}`}
+                      className="bg-black/20 border border-red-500/10 rounded-2xl px-4 py-3"
+                    >
+                      <p className="text-[11px] font-black text-red-200">
+                        {formatarCNPJ(item.cnpj)}
+                      </p>
+                      <p className="text-[10px] text-red-300/80 mt-1">
+                        {item.erro}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      <nav className="fixed bottom-6 left-6 right-6 h-16 bg-zinc-900/90 backdrop-blur-md border border-white/10 rounded-full px-8 flex justify-around items-center z-50 shadow-2xl">
+        {[ABAS.ESTOQUE, ABAS.TRIAGEM].map((a) => (
+          <button
+            key={a}
+            onClick={() => setAba(a)}
+            className={`text-[11px] font-black uppercase tracking-widest ${
+              aba === a ? 'text-blue-500' : 'text-zinc-600'
+            }`}
+          >
+            {a}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
