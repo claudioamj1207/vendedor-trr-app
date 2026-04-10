@@ -54,13 +54,6 @@ const CAMPOS_COMPARACAO_POR_INCLUDES = [
 
 const ITENS_POR_PAGINA = 50;
 
-const MODOS_EXPORTACAO = {
-  FILTRADOS: 'filtrados',
-  ESTOQUE: 'estoque',
-  TRIAGEM: 'triagem',
-  BANCO_COMPLETO: 'banco_completo'
-};
-
 const normalizarCNPJ = (cnpj) => String(cnpj || '').replace(/\D/g, '');
 
 const formatarCNPJ = (cnpj) => {
@@ -135,122 +128,6 @@ const lerArquivoComoTexto = async (file) => {
   });
 };
 
-function AvisoResultado({ tipo, mensagem, onFechar }) {
-  if (!mensagem) return null;
-
-  const estilos = {
-    sucesso: {
-      caixa: 'bg-emerald-900/30 border border-emerald-500/50 text-emerald-400',
-      botao: 'bg-emerald-500/20',
-      icone: '✅'
-    },
-    erro: {
-      caixa: 'bg-red-900/30 border border-red-500/50 text-red-400',
-      botao: 'bg-red-500/20',
-      icone: '❌'
-    }
-  };
-
-  const estilo = estilos[tipo] || estilos.sucesso;
-
-  return (
-    <div className={`${estilo.caixa} p-4 rounded-2xl mb-6 flex justify-between items-center text-xs font-bold animate-pulse gap-3`}>
-      <span>{estilo.icone} {mensagem}</span>
-      <button
-        onClick={onFechar}
-        className={`${estilo.botao} px-3 py-1 rounded-full text-[10px]`}
-      >
-        OK
-      </button>
-    </div>
-  );
-}
-
-function LeadCard({ lead, onMover }) {
-  return (
-    <div className="py-4 px-4 flex justify-between items-center gap-3 hover:bg-zinc-800/40 transition-colors">
-      <div className="flex-1 min-w-0">
-        <h3 className="text-[12px] font-bold uppercase truncate text-white leading-tight">
-          {lead.razao_social}
-        </h3>
-
-        <div className="flex gap-2 mt-2 flex-wrap">
-          <span className="text-[8px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 font-bold border border-white/5 uppercase">
-            {lead.bairro}
-          </span>
-
-          <span className="text-[8px] bg-blue-900/20 px-2 py-0.5 rounded text-blue-400 font-bold border border-blue-500/10 uppercase">
-            {lead.cnpj}
-          </span>
-
-          <span className="text-[8px] bg-orange-900/20 px-2 py-0.5 rounded text-orange-400 font-bold border border-orange-500/10 truncate max-w-[200px]">
-            {lead.cnae_principal_descricao || 'SEM CNAE'}
-          </span>
-
-          {lead.cnae_secundario && (
-            <span className="text-[8px] bg-zinc-900/50 px-2 py-0.5 rounded text-zinc-500 font-medium truncate max-w-[200px] italic text-white">
-              Sec: {lead.cnae_secundario}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <button
-        onClick={onMover}
-        className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center text-white active:scale-95 transition-all"
-      >
-        ➡️
-      </button>
-    </div>
-  );
-}
-
-function ControlesPaginacao({ paginaAtual, totalPaginas, onIrParaPagina }) {
-  if (totalPaginas <= 1) return null;
-
-  return (
-    <div className="mt-6 bg-zinc-900/50 border border-white/5 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
-      <div className="text-[10px] text-zinc-400 font-black uppercase tracking-widest">
-        Página {paginaAtual} de {totalPaginas}
-      </div>
-
-      <div className="flex items-center gap-2 flex-wrap justify-center">
-        <button
-          onClick={() => onIrParaPagina(1)}
-          disabled={paginaAtual === 1}
-          className="px-3 py-2 rounded-xl text-[10px] font-black bg-zinc-800 border border-white/10 text-white disabled:opacity-30"
-        >
-          Primeira
-        </button>
-
-        <button
-          onClick={() => onIrParaPagina(paginaAtual - 1)}
-          disabled={paginaAtual === 1}
-          className="px-3 py-2 rounded-xl text-[10px] font-black bg-zinc-800 border border-white/10 text-white disabled:opacity-30"
-        >
-          Anterior
-        </button>
-
-        <button
-          onClick={() => onIrParaPagina(paginaAtual + 1)}
-          disabled={paginaAtual === totalPaginas}
-          className="px-3 py-2 rounded-xl text-[10px] font-black bg-zinc-800 border border-white/10 text-white disabled:opacity-30"
-        >
-          Próxima
-        </button>
-
-        <button
-          onClick={() => onIrParaPagina(totalPaginas)}
-          disabled={paginaAtual === totalPaginas}
-          className="px-3 py-2 rounded-xl text-[10px] font-black bg-zinc-800 border border-white/10 text-white disabled:opacity-30"
-        >
-          Última
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function VendedorTRR_Master() {
   const [leads, setLeads] = useState([]);
   const [aba, setAba] = useState(ABAS.ESTOQUE);
@@ -262,17 +139,12 @@ export default function VendedorTRR_Master() {
   const [resultadoBusca, setResultadoBusca] = useState('');
   const [erroBusca, setErroBusca] = useState('');
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
-  const [mostrarExportacao, setMostrarExportacao] = useState(false);
   const [totalAbsoluto, setTotalAbsoluto] = useState(0);
   const [ultimosCnpjsProcessados, setUltimosCnpjsProcessados] = useState([]);
   const [ultimosCnpjsFalhados, setUltimosCnpjsFalhados] = useState([]);
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [filtrosAtivos, setFiltrosAtivos] = useState(FILTROS_INICIAIS);
   const [buscaDebounced, setBuscaDebounced] = useState('');
-  const [mostrarPainelExportacao, setMostrarPainelExportacao] = useState(false);
-  const [mostrarPainelExportacao, setMostrarPainelExportacao] = useState(false);
-  const [modoExportacao, setModoExportacao] = useState(MODOS_EXPORTACAO.FILTRADOS);
-  const [exportando, setExportando] = useState(false);
 
   const limparMensagens = useCallback(() => {
     setResultadoBusca('');
@@ -781,132 +653,6 @@ export default function VendedorTRR_Master() {
     setPaginaAtual(pagina);
   }, [totalPaginas]);
 
-  const buscarLeadsPorStatus = useCallback(async (statusLead) => {
-    let todos = [];
-    let de = 0;
-    let ate = 999;
-    let continua = true;
-
-    while (continua) {
-      const { data, error } = await supabase
-        .from('empresas_mestre')
-        .select('*')
-        .eq('status_lead', statusLead)
-        .order('razao_social', { ascending: true })
-        .range(de, ate);
-
-      if (error) throw error;
-
-      todos = [...todos, ...(data || [])];
-
-      if (!data || data.length < 1000) {
-        continua = false;
-      } else {
-        de += 1000;
-        ate += 1000;
-      }
-    }
-
-    return todos;
-  }, []);
-
-  const buscarTodosDoBanco = useCallback(async () => {
-    let todos = [];
-    let de = 0;
-    let ate = 999;
-    let continua = true;
-
-    while (continua) {
-      const { data, error } = await supabase
-        .from('empresas_mestre')
-        .select('*')
-        .order('razao_social', { ascending: true })
-        .range(de, ate);
-
-      if (error) throw error;
-
-      todos = [...todos, ...(data || [])];
-
-      if (!data || data.length < 1000) {
-        continua = false;
-      } else {
-        de += 1000;
-        ate += 1000;
-      }
-    }
-
-    return todos;
-  }, []);
-
-  const prepararDadosParaExportacao = useCallback((lista) => {
-    return lista.map((lead) => ({
-      'Razão Social': lead.razao_social || '',
-      'Nome Fantasia': lead.nome_fantasia || '',
-      'CNPJ': formatarCNPJ(lead.cnpj || ''),
-      'CNPJ Limpo': normalizarCNPJ(lead.cnpj || ''),
-      'Logradouro': lead.logradouro || '',
-      'Número': lead.numero || '',
-      'Bairro': lead.bairro || '',
-      'Município': lead.municipio || '',
-      'UF': lead.uf || '',
-      'Fonte do Lead': lead.fonte_lead || '',
-      'CNAE Principal': lead.cnae_principal_descricao || '',
-      'CNAE Secundário': lead.cnae_secundario || '',
-      'Situação Cadastral': lead.situacao_cadastral || '',
-      'Status do Lead': lead.status_lead || ''
-    }));
-  }, []);
-
-  const exportarLeads = useCallback(async () => {
-    try {
-      setExportando(true);
-      limparMensagens();
-
-      let dadosBrutos = [];
-      let nomeArquivo = 'leads';
-
-      if (modoExportacao === MODOS_EXPORTACAO.FILTRADOS) {
-        dadosBrutos = leadsFiltrados;
-        nomeArquivo = `leads-filtrados-${aba}`;
-      }
-
-      if (modoExportacao === MODOS_EXPORTACAO.ESTOQUE) {
-        dadosBrutos = await buscarLeadsPorStatus(STATUS_LEAD.NOVO);
-        nomeArquivo = 'leads-estoque';
-      }
-
-      if (modoExportacao === MODOS_EXPORTACAO.TRIAGEM) {
-        dadosBrutos = await buscarLeadsPorStatus(STATUS_LEAD.TRIAGEM);
-        nomeArquivo = 'leads-triagem';
-      }
-
-      if (modoExportacao === MODOS_EXPORTACAO.BANCO_COMPLETO) {
-        dadosBrutos = await buscarTodosDoBanco();
-        nomeArquivo = 'leads-banco-completo';
-      }
-
-      if (!dadosBrutos || dadosBrutos.length === 0) {
-        setErroBusca('Nenhum lead encontrado para exportar.');
-        return;
-      }
-
-      const dadosPlanilha = prepararDadosParaExportacao(dadosBrutos);
-      const worksheet = XLSX.utils.json_to_sheet(dadosPlanilha);
-      const workbook = XLSX.utils.book_new();
-
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Leads');
-      XLSX.writeFile(workbook, `${nomeArquivo}.xlsx`);
-
-      setResultadoBusca(`${dadosBrutos.length} lead(s) exportado(s) com sucesso.`);
-      setMostrarPainelExportacao(false);
-    } catch (error) {
-      console.error('Erro ao exportar leads:', error);
-      setErroBusca(`Erro ao exportar leads: ${error.message || 'falha na exportação.'}`);
-    } finally {
-      setExportando(false);
-    }
-  }, [aba, buscarLeadsPorStatus, buscarTodosDoBanco, leadsFiltrados, limparMensagens, modoExportacao, prepararDadosParaExportacao]);
-
   return (
     <div className="min-h-screen bg-black text-white pb-40 font-sans antialiased">
       <header className="px-5 pt-8 pb-4 sticky top-0 bg-black/95 border-b border-white/5 z-50">
@@ -961,27 +707,6 @@ export default function VendedorTRR_Master() {
             )}
 
             <button
-              onClick={() => setMostrarPainelExportacao(!mostrarPainelExportacao)}
-              className="text-[9px] bg-blue-700 px-4 py-2 rounded-full font-bold border border-blue-400/20"
-            >
-              {exportando ? 'EXPORTANDO...' : 'EXPORTAR'}
-            </button>
-
-            <button
-              onClick={() => setMostrarPainelExportacao(!mostrarPainelExportacao)}
-              className="text-[9px] bg-blue-700 px-4 py-2 rounded-full font-bold border border-blue-400/20"
-            >
-              EXPORTAR
-            </button>
-
-            <button
-              onClick={() => setMostrarExportacao(!mostrarExportacao)}
-              className="text-[9px] bg-blue-700 px-4 py-2 rounded-full font-bold border border-blue-400/20"
-            >
-              EXPORTAR
-            </button>
-
-            <button
               onClick={() => setMostrarFiltros(!mostrarFiltros)}
               className="text-[9px] bg-zinc-800 px-4 py-2 rounded-full font-bold border border-white/10"
             >
@@ -999,96 +724,6 @@ export default function VendedorTRR_Master() {
               value={buscaGlobal}
               onChange={(e) => setBuscaGlobal(e.target.value)}
             />
-
-            {mostrarPainelExportacao && (
-              <div className="p-4 bg-zinc-900 rounded-2xl border border-blue-500/10 space-y-4">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-3">
-                    Exportação de Leads
-                  </p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label className="flex items-center gap-2 text-[11px] text-white">
-                      <input
-                        type="radio"
-                        name="modo-exportacao"
-                        value={MODOS_EXPORTACAO.FILTRADOS}
-                        checked={modoExportacao === MODOS_EXPORTACAO.FILTRADOS}
-                        onChange={(e) => setModoExportacao(e.target.value)}
-                      />
-                      Leads filtrados da tela
-                    </label>
-
-                    <label className="flex items-center gap-2 text-[11px] text-white">
-                      <input
-                        type="radio"
-                        name="modo-exportacao"
-                        value={MODOS_EXPORTACAO.ESTOQUE}
-                        checked={modoExportacao === MODOS_EXPORTACAO.ESTOQUE}
-                        onChange={(e) => setModoExportacao(e.target.value)}
-                      />
-                      Todos do estoque
-                    </label>
-
-                    <label className="flex items-center gap-2 text-[11px] text-white">
-                      <input
-                        type="radio"
-                        name="modo-exportacao"
-                        value={MODOS_EXPORTACAO.TRIAGEM}
-                        checked={modoExportacao === MODOS_EXPORTACAO.TRIAGEM}
-                        onChange={(e) => setModoExportacao(e.target.value)}
-                      />
-                      Todos da triagem
-                    </label>
-
-                    <label className="flex items-center gap-2 text-[11px] text-white">
-                      <input
-                        type="radio"
-                        name="modo-exportacao"
-                        value={MODOS_EXPORTACAO.BANCO_COMPLETO}
-                        checked={modoExportacao === MODOS_EXPORTACAO.BANCO_COMPLETO}
-                        onChange={(e) => setModoExportacao(e.target.value)}
-                      />
-                      Todo o banco de dados
-                    </label>
-                  </div>
-                </div>
-
-                <div className="flex gap-2 flex-wrap">
-                  <button
-                    onClick={exportarLeads}
-                    disabled={exportando}
-                    className="text-[10px] bg-emerald-600 px-4 py-2 rounded-full font-bold disabled:opacity-50"
-                  >
-                    {exportando ? 'GERANDO XLSX...' : 'CONFIRMAR EXPORTAÇÃO'}
-                  </button>
-
-                  <button
-                    onClick={() => setMostrarPainelExportacao(false)}
-                    disabled={exportando}
-                    className="text-[10px] bg-zinc-800 px-4 py-2 rounded-full font-bold border border-white/10 disabled:opacity-50"
-                  >
-                    FECHAR
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {mostrarPainelExportacao && (
-              <div className="p-4 bg-zinc-900 rounded-2xl border border-blue-500/10">
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">
-                  Painel de exportação em preparação
-                </p>
-              </div>
-            )}
-
-            {mostrarExportacao && (
-              <div className="p-4 bg-zinc-900 rounded-2xl border border-blue-500/10">
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">
-                  Exportação em breve
-                </p>
-              </div>
-            )}
 
             {mostrarFiltros && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4 bg-zinc-900 rounded-2xl border border-white/5">
@@ -1138,11 +773,141 @@ export default function VendedorTRR_Master() {
                 )}
 
                 {!carregando && leadsFiltrados.length > 0 && (
-              <ControlesPaginacao
-                paginaAtual={paginaAtual}
-                totalPaginas={totalPaginas}
-                onIrParaPagina={irParaPagina}
-              />
+                  <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">
+                    Mostrando {paginaInicial}-{paginaFinal}
+                  </p>
+                )}
+              </div>
+
+              {statusProcesso && (
+                <p className="text-[9px] text-blue-500 animate-pulse font-black uppercase italic">
+                  {statusProcesso}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </header>
+
+      <main className="px-4 mt-6">
+        {resultadoBusca && (
+          <div className="bg-emerald-900/30 border border-emerald-500/50 p-4 rounded-2xl mb-6 flex justify-between items-center text-emerald-400 text-xs font-bold animate-pulse gap-3">
+            <span>✅ {resultadoBusca}</span>
+            <button
+              onClick={() => setResultadoBusca('')}
+              className="bg-emerald-500/20 px-3 py-1 rounded-full text-[10px]"
+            >
+              OK
+            </button>
+          </div>
+        )}
+
+        {erroBusca && (
+          <div className="bg-red-900/30 border border-red-500/50 p-4 rounded-2xl mb-6 flex justify-between items-center text-red-400 text-xs font-bold animate-pulse gap-3">
+            <span>❌ {erroBusca}</span>
+            <button
+              onClick={() => setErroBusca('')}
+              className="bg-red-500/20 px-3 py-1 rounded-full text-[10px]"
+            >
+              OK
+            </button>
+          </div>
+        )}
+
+        {moduloAtivo === MODULOS.TODO && (
+          <>
+            <div className="bg-zinc-900/30 border border-white/5 rounded-2xl divide-y divide-zinc-800/50">
+              {carregando ? (
+                <div className="text-center py-20 text-[10px] animate-pulse text-zinc-600 font-black uppercase tracking-widest">
+                  Sincronizando...
+                </div>
+              ) : leadsFiltrados.length === 0 ? (
+                <div className="text-center py-20 text-[10px] text-zinc-600 font-black uppercase tracking-widest">
+                  Nenhum lead encontrado
+                </div>
+              ) : (
+                leadsPaginados.map((lead) => (
+                  <div
+                    key={lead.cnpj}
+                    className="py-4 px-4 flex justify-between items-center gap-3 hover:bg-zinc-800/40 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-[12px] font-bold uppercase truncate text-white leading-tight">
+                        {lead.razao_social}
+                      </h3>
+
+                      <div className="flex gap-2 mt-2 flex-wrap">
+                        <span className="text-[8px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 font-bold border border-white/5 uppercase">
+                          {lead.bairro}
+                        </span>
+
+                        <span className="text-[8px] bg-blue-900/20 px-2 py-0.5 rounded text-blue-400 font-bold border border-blue-500/10 uppercase">
+                          {lead.cnpj}
+                        </span>
+
+                        <span className="text-[8px] bg-orange-900/20 px-2 py-0.5 rounded text-orange-400 font-bold border border-orange-500/10 truncate max-w-[200px]">
+                          {lead.cnae_principal_descricao || 'SEM CNAE'}
+                        </span>
+
+                        {lead.cnae_secundario && (
+                          <span className="text-[8px] bg-zinc-900/50 px-2 py-0.5 rounded text-zinc-500 font-medium truncate max-w-[200px] italic text-white">
+                            Sec: {lead.cnae_secundario}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => moverLead(lead)}
+                      className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center text-white active:scale-95 transition-all"
+                    >
+                      ➡️
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {!carregando && leadsFiltrados.length > 0 && totalPaginas > 1 && (
+              <div className="mt-6 bg-zinc-900/50 border border-white/5 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="text-[10px] text-zinc-400 font-black uppercase tracking-widest">
+                  Página {paginaAtual} de {totalPaginas}
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap justify-center">
+                  <button
+                    onClick={() => irParaPagina(1)}
+                    disabled={paginaAtual === 1}
+                    className="px-3 py-2 rounded-xl text-[10px] font-black bg-zinc-800 border border-white/10 text-white disabled:opacity-30"
+                  >
+                    Primeira
+                  </button>
+
+                  <button
+                    onClick={() => irParaPagina(paginaAtual - 1)}
+                    disabled={paginaAtual === 1}
+                    className="px-3 py-2 rounded-xl text-[10px] font-black bg-zinc-800 border border-white/10 text-white disabled:opacity-30"
+                  >
+                    Anterior
+                  </button>
+
+                  <button
+                    onClick={() => irParaPagina(paginaAtual + 1)}
+                    disabled={paginaAtual === totalPaginas}
+                    className="px-3 py-2 rounded-xl text-[10px] font-black bg-zinc-800 border border-white/10 text-white disabled:opacity-30"
+                  >
+                    Próxima
+                  </button>
+
+                  <button
+                    onClick={() => irParaPagina(totalPaginas)}
+                    disabled={paginaAtual === totalPaginas}
+                    className="px-3 py-2 rounded-xl text-[10px] font-black bg-zinc-800 border border-white/10 text-white disabled:opacity-30"
+                  >
+                    Última
+                  </button>
+                </div>
+              </div>
             )}
           </>
         )}
