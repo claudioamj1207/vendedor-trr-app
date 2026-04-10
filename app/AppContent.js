@@ -39,13 +39,10 @@ const CAMPOS_FILTRO = [
   { label: 'CNAE Principal', campo: 'cnae_principal_descricao' }
 ];
 
-const CAMPOS_COM_BUSCA_EXATA = [
-  'razao_social',
-  'nome_fantasia',
-  'cnpj',
-  'bairro',
-  'fonte_lead',
-  'cnae_principal_descricao'
+const CAMPOS_COM_BUSCA_EXATA = [$1];
+
+const CAMPOS_COMPARACAO_POR_INCLUDES = [
+  'cnae_secundario'
 ];
 
 const ITENS_POR_PAGINA = 50;
@@ -335,64 +332,45 @@ export default function VendedorTRR_Master() {
     return opcoes;
   }, [leads]);
 
+  const filtrosExatosAtivos = useMemo(() => {
+    return CAMPOS_COM_BUSCA_EXATA
+      .filter((campo) => filtrosAtivos[campo] !== 'Todos')
+      .map((campo) => ({
+        campo,
+        valor: filtrosAtivos[campo]
+      }));
+  }, [filtrosAtivos]);
+
+  const filtrosParciaisAtivos = useMemo(() => {
+    return CAMPOS_COMPARACAO_POR_INCLUDES
+      .filter((campo) => filtrosAtivos[campo] !== 'Todos')
+      .map((campo) => ({
+        campo,
+        valor: filtrosAtivos[campo]
+      }));
+  }, [filtrosAtivos]);
+
   const leadsFiltrados = useMemo(() => {
     return leads.filter((lead) => {
-      if (
-        filtrosAtivos.razao_social !== 'Todos' &&
-        lead.razao_social !== filtrosAtivos.razao_social
-      ) {
-        return false;
-      }
-
-      if (
-        filtrosAtivos.nome_fantasia !== 'Todos' &&
-        lead.nome_fantasia !== filtrosAtivos.nome_fantasia
-      ) {
-        return false;
-      }
-
-      if (
-        filtrosAtivos.cnpj !== 'Todos' &&
-        lead.cnpj !== filtrosAtivos.cnpj
-      ) {
-        return false;
-      }
-
-      if (
-        filtrosAtivos.bairro !== 'Todos' &&
-        lead.bairro !== filtrosAtivos.bairro
-      ) {
-        return false;
-      }
-
-      if (
-        filtrosAtivos.fonte_lead !== 'Todos' &&
-        lead.fonte_lead !== filtrosAtivos.fonte_lead
-      ) {
-        return false;
-      }
-
-      if (
-        filtrosAtivos.cnae_principal_descricao !== 'Todos' &&
-        lead.cnae_principal_descricao !== filtrosAtivos.cnae_principal_descricao
-      ) {
-        return false;
-      }
-
-      if (
-        filtrosAtivos.cnae_secundario !== 'Todos' &&
-        !(lead.cnae_secundario && lead.cnae_secundario.includes(filtrosAtivos.cnae_secundario))
-      ) {
-        return false;
-      }
-
       if (buscaDebounced && !(lead._busca && lead._busca.includes(buscaDebounced))) {
         return false;
       }
 
+      for (const filtro of filtrosExatosAtivos) {
+        if (lead[filtro.campo] !== filtro.valor) {
+          return false;
+        }
+      }
+
+      for (const filtro of filtrosParciaisAtivos) {
+        if (!(lead[filtro.campo] && String(lead[filtro.campo]).includes(filtro.valor))) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [leads, filtrosAtivos, buscaDebounced]);
+  }, [leads, buscaDebounced, filtrosExatosAtivos, filtrosParciaisAtivos]);
 
   const totalPaginas = useMemo(() => {
     return Math.max(1, Math.ceil(leadsFiltrados.length / ITENS_POR_PAGINA));
