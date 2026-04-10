@@ -1,118 +1,79 @@
 "use client";
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
-import { consultarCNPJNaBrasilAPI } from '../lib/brasilApi';
-import * as XLSX from 'xlsx';
-import LeadVisualModal from '../components/LeadVisualModal';
-import TriagemLeadRow from '../components/TriagemLeadRow';
+import React from 'react';
 
-const STATUS_LEAD = {
-  NOVO: 'Novo',
-  TRIAGEM: 'Triagem',
-  EM_PROSPECCAO: 'Em Prospecção'
-};
+export default function TriagemLeadRow({
+  lead,
+  onVisualizar,
+  onMover,
+  onAvancar,
+  onEnviar,
+  onProspeccao,
+  formatarCNPJ
+}) {
+  const handleAvancar =
+    onProspeccao || onAvancar || onEnviar || onMover || (() => {});
 
-const MODULOS = {
-  TODO: 'todo',
-  PESCARIA: 'pescaria'
-};
+  return (
+    <div className="px-4 py-4 hover:bg-zinc-800/40 transition-colors">
+      <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-col gap-2">
+            <h3 className="text-[12px] md:text-[13px] font-bold uppercase text-white leading-tight break-words">
+              {lead?.razao_social || 'SEM RAZÃO SOCIAL'}
+            </h3>
 
-const ABAS = {
-  ESTOQUE: 'estoque',
-  TRIAGEM: 'triagem'
-};
+            <div className="flex flex-wrap gap-2">
+              <span className="text-[9px] bg-blue-900/20 px-2.5 py-1 rounded-lg text-blue-300 font-bold border border-blue-500/10">
+                {formatarCNPJ ? formatarCNPJ(lead?.cnpj || '') : (lead?.cnpj || 'SEM CNPJ')}
+              </span>
 
-const ITENS_POR_PAGINA = 50;
+              <span className="text-[9px] bg-zinc-800 px-2.5 py-1 rounded-lg text-zinc-300 font-bold border border-white/5 uppercase">
+                {lead?.bairro || 'SEM BAIRRO'}
+              </span>
 
-const normalizarCNPJ = (cnpj) => String(cnpj || '').replace(/\D/g, '');
+              <span className="text-[9px] bg-emerald-900/20 px-2.5 py-1 rounded-lg text-emerald-300 font-bold border border-emerald-500/10 uppercase">
+                {lead?.municipio || 'SEM MUNICÍPIO'}{lead?.uf ? ` - ${lead.uf}` : ''}
+              </span>
 
-const formatarCNPJ = (cnpj) => {
-  const limpo = normalizarCNPJ(cnpj);
-  if (limpo.length !== 14) return cnpj;
-  return limpo.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
-};
-export default function VendedorTRR_Master() {
-  const [leads, setLeads] = useState([]);
-  const [aba, setAba] = useState(ABAS.ESTOQUE);
-  const [moduloAtivo, setModuloAtivo] = useState(MODULOS.TODO);
-  const [buscaGlobal, setBuscaGlobal] = useState('');
-  const [paginaAtual, setPaginaAtual] = useState(1);
-  const [leadVisualizando, setLeadVisualizando] = useState(null);
-
-  const sincronizar = useCallback(async () => {
-    const { data } = await supabase
-      .from('empresas_mestre')
-      .select('*')
-      .order('razao_social', { ascending: true });
-
-    setLeads(data || []);
-  }, []);
-
-  useEffect(() => {
-    sincronizar();
-  }, [sincronizar]);
-
-  const leadsFiltrados = useMemo(() => {
-    if (!buscaGlobal) return leads;
-    return leads.filter(l =>
-      JSON.stringify(l).toLowerCase().includes(buscaGlobal.toLowerCase())
-    );
-  }, [leads, buscaGlobal]);
-
-  const totalPaginas = Math.ceil(leadsFiltrados.length / ITENS_POR_PAGINA);
-
-  const leadsPaginados = useMemo(() => {
-    const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
-    return leadsFiltrados.slice(inicio, inicio + ITENS_POR_PAGINA);
-  }, [leadsFiltrados, paginaAtual]);
-
-  const moverLead = async (lead) => {
-    await supabase
-      .from('empresas_mestre')
-      .update({ status_lead: STATUS_LEAD.TRIAGEM })
-      .eq('cnpj', lead.cnpj);
-
-    sincronizar();
-  };
-    return (
-    <div className="min-h-screen bg-black text-white p-4">
-
-      <input
-        value={buscaGlobal}
-        onChange={(e) => setBuscaGlobal(e.target.value)}
-        placeholder="Buscar..."
-        className="w-full p-3 bg-zinc-900 rounded-xl mb-4"
-      />
-
-      {leadVisualizando && (
-        <LeadVisualModal
-          lead={leadVisualizando}
-          onClose={() => setLeadVisualizando(null)}
-        />
-      )}
-
-      <div className="space-y-2">
-        {leadsPaginados.map((lead) => (
-          aba === ABAS.TRIAGEM ? (
-            <TriagemLeadRow
-              key={lead.cnpj}
-              lead={lead}
-              onVisualizar={setLeadVisualizando}
-              onIncrementar={() => alert('incrementar')}
-              onCadastrar={() => alert('pdf')}
-              onMesaDeTrabalho={moverLead}
-              onEstoque={() => alert('estoque')}
-              onDeletar={() => alert('deletar')}
-            />
-          ) : (
-            <div key={lead.cnpj} className="bg-zinc-900 p-3 rounded-xl flex justify-between">
-              <span>{lead.razao_social}</span>
-              <button onClick={() => moverLead(lead)}>➡️</button>
+              <span className="text-[9px] bg-orange-900/20 px-2.5 py-1 rounded-lg text-orange-300 font-bold border border-orange-500/10 max-w-full truncate">
+                {lead?.cnae_principal_descricao || 'SEM CNAE'}
+              </span>
             </div>
-          )
-        ))}
-      </div>
 
+            {lead?.nome_fantasia && lead.nome_fantasia !== lead.razao_social && (
+              <p className="text-[10px] text-zinc-400 truncate">
+                Fantasia: {lead.nome_fantasia}
+              </p>
+            )}
+
+            {lead?.fonte_lead && (
+              <p className="text-[10px] text-zinc-500 truncate">
+                Fonte: {lead.fonte_lead}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onVisualizar}
+            className="min-w-[110px] h-10 px-4 rounded-xl bg-zinc-800 text-white text-[10px] font-black uppercase tracking-wide border border-white/10 hover:bg-zinc-700 active:scale-95 transition-all"
+            title="Visualizar lead"
+          >
+            Visualizar
+          </button>
+
+          <button
+            type="button"
+            onClick={handleAvancar}
+            className="min-w-[110px] h-10 px-4 rounded-xl bg-blue-600 text-white text-[10px] font-black uppercase tracking-wide hover:bg-blue-500 active:scale-95 transition-all"
+            title="Enviar para prospecção"
+          >
+            Avançar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
