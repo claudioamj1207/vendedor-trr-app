@@ -39,7 +39,14 @@ const CAMPOS_FILTRO = [
   { label: 'CNAE Principal', campo: 'cnae_principal_descricao' }
 ];
 
-const CAMPOS_COM_BUSCA_EXATA = [$1];
+const CAMPOS_COM_BUSCA_EXATA = [
+  'razao_social',
+  'nome_fantasia',
+  'cnpj',
+  'bairro',
+  'fonte_lead',
+  'cnae_principal_descricao'
+];
 
 const CAMPOS_COMPARACAO_POR_INCLUDES = [
   'cnae_secundario'
