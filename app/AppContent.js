@@ -30,7 +30,14 @@ const FILTROS_INICIAIS = {
   cnae_secundario: 'Todos'
 };
 
-const CAMPOS_FILTRO = [$1];
+const CAMPOS_FILTRO = [
+  { label: 'Razão Social', campo: 'razao_social' },
+  { label: 'Nome Fantasia', campo: 'nome_fantasia' },
+  { label: 'CNPJ', campo: 'cnpj' },
+  { label: 'Bairro', campo: 'bairro' },
+  { label: 'Fonte', campo: 'fonte_lead' },
+  { label: 'CNAE Principal', campo: 'cnae_principal_descricao' }
+];
 
 const CAMPOS_COM_BUSCA_EXATA = [
   'razao_social',
