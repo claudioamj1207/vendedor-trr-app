@@ -16,6 +16,7 @@ export default function VendedorTRR_Master() {
   const [erroBusca, setErroBusca] = useState('');
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const [totalAbsoluto, setTotalAbsoluto] = useState(0);
+  const [ultimosCnpjsProcessados, setUltimosCnpjsProcessados] = useState([]);
 
   const [filtrosAtivos, setFiltrosAtivos] = useState({
     razao_social: 'Todos',
@@ -40,6 +41,12 @@ export default function VendedorTRR_Master() {
           .filter((cnpj) => cnpj.length === 14)
       )
     ];
+  };
+
+  const formatarCNPJ = (cnpj) => {
+    const limpo = String(cnpj || '').replace(/\D/g, '');
+    if (limpo.length !== 14) return cnpj;
+    return limpo.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
   };
 
   const processarEmLotes = async ({
@@ -308,6 +315,7 @@ export default function VendedorTRR_Master() {
 
     setResultadoBusca('');
     setErroBusca('');
+    setUltimosCnpjsProcessados([]);
     setStatusProcesso('Lendo arquivo...');
 
     const reader = new FileReader();
@@ -331,6 +339,8 @@ export default function VendedorTRR_Master() {
           setErroBusca("Nenhum CNPJ com 14 dígitos encontrado no arquivo.");
           return;
         }
+
+        setUltimosCnpjsProcessados(cnpjs);
 
         const { sucesso, ultimoErro } = await processarEmLotes({
           itens: cnpjs,
@@ -375,6 +385,8 @@ export default function VendedorTRR_Master() {
       return;
     }
 
+    setUltimosCnpjsProcessados(cnpjs);
+
     const { sucesso, ultimoErro } = await processarEmLotes({
       itens: cnpjs,
       tamanhoLote: 5,
@@ -417,6 +429,7 @@ export default function VendedorTRR_Master() {
                   setResultadoBusca('');
                   setErroBusca('');
                   setStatusProcesso('');
+                  setUltimosCnpjsProcessados([]);
                 }}
                 className={
                   moduloAtivo === m
@@ -674,6 +687,30 @@ export default function VendedorTRR_Master() {
                 PESCAR E SALVAR
               </button>
             </div>
+
+            {ultimosCnpjsProcessados.length > 0 && (
+              <div className="bg-zinc-900/70 border border-white/5 rounded-3xl p-6">
+                <div className="flex justify-between items-center mb-4 gap-4">
+                  <h3 className="text-lg font-black uppercase text-white">
+                    Última pesquisa
+                  </h3>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                    {ultimosCnpjsProcessados.length} CNPJ(s)
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {ultimosCnpjsProcessados.map((cnpj) => (
+                    <span
+                      key={cnpj}
+                      className="text-[10px] bg-blue-900/20 px-3 py-2 rounded-full text-blue-300 font-bold border border-blue-500/10"
+                    >
+                      {formatarCNPJ(cnpj)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
