@@ -50,6 +50,8 @@ export default function VendedorTRR_Master() {
     return limpo.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
   };
 
+  const normalizarCNPJ = (cnpj) => String(cnpj || '').replace(/\D/g, '');
+
   const processarEmLotes = async ({
     itens,
     tamanhoLote = 5,
@@ -255,32 +257,101 @@ export default function VendedorTRR_Master() {
   };
 
   const limparInativos = async () => {
-    if (!confirm(`Limpar inativos dos ${leadsFiltrados.length} leads atuais?`)) {
+    if (!confirm(`Limpar inativos e duplicados? Isso vai verificar ${leadsFiltrados.length} lead(s) da tela e depois limpar duplicidades no banco.`)) {
       return;
     }
 
     setResultadoBusca('');
     setErroBusca('');
 
-    let excluidos = 0;
+    let excluidosInativos = 0;
+    let excluidosDuplicados = 0;
 
-    for (let i = 0; i < leadsFiltrados.length; i++) {
-      const lead = leadsFiltrados[i];
-      setStatusProcesso(`Verificando ${i + 1} de ${leadsFiltrados.length}: ${lead.razao_social}`);
+    try {
+      for (let i = 0; i < leadsFiltrados.length; i++) {
+        const lead = leadsFiltrados[i];
+        setStatusProcesso(`Verificando ativos ${i + 1} de ${leadsFiltrados.length}: ${lead.razao_social}`);
 
-      const resultado = await processarCNPJ(lead.cnpj, lead);
+        const resultado = await processarCNPJ(lead.cnpj, lead);
 
-      if (resultado && resultado.ok && resultado.situacao !== 'ATIVA') {
-        await supabase.from('empresas_mestre').delete().eq('cnpj', lead.cnpj);
-        excluidos++;
+        if (resultado && resultado.ok && resultado.situacao !== 'ATIVA') {
+          await supabase.from('empresas_mestre').delete().eq('cnpj', lead.cnpj);
+          excluidosInativos++;
+        }
+
+        await new Promise((r) => setTimeout(r, 450));
       }
 
-      await new Promise((r) => setTimeout(r, 450));
-    }
+      setStatusProcesso('Verificando duplicados no banco...');
 
-    setStatusProcesso('');
-    setResultadoBusca(`${excluidos} empresa(s) inativa(s) removida(s).`);
-    await sincronizar();
+      const { data: todosRegistros, error: erroBuscaDuplicados } = await supabase
+        .from('empresas_mestre')
+        .select('id, cnpj')
+        .order('id', { ascending: true });
+
+      if (erroBuscaDuplicados) {
+        throw erroBuscaDuplicados;
+      }
+
+      if (!todosRegistros || todosRegistros.length === 0) {
+        setStatusProcesso('');
+        setResultadoBusca(`Limpeza concluída: ${excluidosInativos} inativo(s) removido(s) e 0 duplicado(s) removido(s).`);
+        await sincronizar();
+        return;
+      }
+
+      const semId = todosRegistros.some((item) => item.id === undefined || item.id === null);
+      if (semId) {
+        throw new Error('A tabela empresas_mestre precisa ter a coluna id para limpar duplicados com segurança.');
+      }
+
+      const mapa = new Map();
+      const idsParaExcluir = [];
+
+      for (const registro of todosRegistros) {
+        const cnpjNormalizado = normalizarCNPJ(registro.cnpj);
+
+        if (!cnpjNormalizado || cnpjNormalizado.length !== 14) {
+          continue;
+        }
+
+        if (!mapa.has(cnpjNormalizado)) {
+          mapa.set(cnpjNormalizado, registro.id);
+        } else {
+          idsParaExcluir.push(registro.id);
+        }
+      }
+
+      if (idsParaExcluir.length > 0) {
+        for (let i = 0; i < idsParaExcluir.length; i += 100) {
+          const loteIds = idsParaExcluir.slice(i, i + 100);
+
+          setStatusProcesso(`Removendo duplicados ${Math.min(i + loteIds.length, idsParaExcluir.length)} de ${idsParaExcluir.length}...`);
+
+          const { error: erroDeleteDuplicados } = await supabase
+            .from('empresas_mestre')
+            .delete()
+            .in('id', loteIds);
+
+          if (erroDeleteDuplicados) {
+            throw erroDeleteDuplicados;
+          }
+        }
+
+        excluidosDuplicados = idsParaExcluir.length;
+      }
+
+      setStatusProcesso('');
+      setResultadoBusca(
+        `Limpeza concluída: ${excluidosInativos} inativo(s) removido(s) e ${excluidosDuplicados} duplicado(s) removido(s).`
+      );
+
+      await sincronizar();
+    } catch (err) {
+      console.error('Erro na limpeza:', err);
+      setStatusProcesso('');
+      setErroBusca(`Erro na limpeza: ${err.message || 'falha ao limpar registros.'}`);
+    }
   };
 
   const atualizarFaltantes = async () => {
