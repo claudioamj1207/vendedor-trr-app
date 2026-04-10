@@ -889,95 +889,11 @@ export default function VendedorTRR_Master() {
                 )}
 
                 {!carregando && leadsFiltrados.length > 0 && (
-                  <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">
-                    Mostrando {paginaInicial}-{paginaFinal}
-                  </p>
-                )}
-              </div>
-
-              {statusProcesso && (
-                <p className="text-[9px] text-blue-500 animate-pulse font-black uppercase italic">
-                  {statusProcesso}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-      </header>
-
-      <main className="px-4 mt-6">
-        <AvisoResultado
-          tipo="sucesso"
-          mensagem={resultadoBusca}
-          onFechar={() => setResultadoBusca('')}
-        />
-
-        <AvisoResultado
-          tipo="erro"
-          mensagem={erroBusca}
-          onFechar={() => setErroBusca('')}
-        />
-
-        {moduloAtivo === MODULOS.TODO && (
-          <>
-            <div className="bg-zinc-900/30 border border-white/5 rounded-2xl divide-y divide-zinc-800/50">
-              {carregando ? (
-                <div className="text-center py-20 text-[10px] animate-pulse text-zinc-600 font-black uppercase tracking-widest">
-                  Sincronizando...
-                </div>
-              ) : leadsFiltrados.length === 0 ? (
-                <div className="text-center py-20 text-[10px] text-zinc-600 font-black uppercase tracking-widest">
-                  Nenhum lead encontrado
-                </div>
-              ) : (
-                leadsPaginados.map((lead) => (
-                <LeadCard
-                  key={lead.cnpj}
-                  lead={lead}
-                  onMover={() => moverLead(lead)}
-                />
-              ))
-              )}
-            </div>
-
-            {!carregando && leadsFiltrados.length > 0 && (
               <ControlesPaginacao
                 paginaAtual={paginaAtual}
                 totalPaginas={totalPaginas}
                 onIrParaPagina={irParaPagina}
               />
-            )}
-                    disabled={paginaAtual === 1}
-                    className="px-3 py-2 rounded-xl text-[10px] font-black bg-zinc-800 border border-white/10 text-white disabled:opacity-30"
-                  >
-                    Primeira
-                  </button>
-
-                  <button
-                    onClick={() => irParaPagina(paginaAtual - 1)}
-                    disabled={paginaAtual === 1}
-                    className="px-3 py-2 rounded-xl text-[10px] font-black bg-zinc-800 border border-white/10 text-white disabled:opacity-30"
-                  >
-                    Anterior
-                  </button>
-
-                  <button
-                    onClick={() => irParaPagina(paginaAtual + 1)}
-                    disabled={paginaAtual === totalPaginas}
-                    className="px-3 py-2 rounded-xl text-[10px] font-black bg-zinc-800 border border-white/10 text-white disabled:opacity-30"
-                  >
-                    Próxima
-                  </button>
-
-                  <button
-                    onClick={() => irParaPagina(totalPaginas)}
-                    disabled={paginaAtual === totalPaginas}
-                    className="px-3 py-2 rounded-xl text-[10px] font-black bg-zinc-800 border border-white/10 text-white disabled:opacity-30"
-                  >
-                    Última
-                  </button>
-                </div>
-              </div>
             )}
           </>
         )}
