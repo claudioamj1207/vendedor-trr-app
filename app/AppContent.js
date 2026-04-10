@@ -917,12 +917,6 @@ export default function VendedorTRR_Master() {
           mensagem={erroBusca}
           onFechar={() => setErroBusca('')}
         />
-              className="bg-red-500/20 px-3 py-1 rounded-full text-[10px]"
-            >
-              OK
-            </button>
-          </div>
-        )}
 
         {moduloAtivo === MODULOS.TODO && (
           <>
