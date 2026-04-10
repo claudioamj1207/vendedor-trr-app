@@ -1,87 +1,118 @@
-import React from 'react';
+"use client";
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
+import { consultarCNPJNaBrasilAPI } from '../lib/brasilApi';
+import * as XLSX from 'xlsx';
+import LeadVisualModal from '../components/LeadVisualModal';
+import TriagemLeadRow from '../components/TriagemLeadRow';
 
-export default function TriagemLeadRow({
-  lead,
-  onVisualizar,
-  onIncrementar,
-  onCadastrar,
-  onMesaDeTrabalho,
-  onEstoque,
-  onDeletar
-}) {
-  return (
-    <div className="bg-zinc-900/60 border border-white/5 rounded-2xl px-4 py-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-      <div className="flex-1 min-w-0">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4">
-          <h3 className="text-[12px] font-bold uppercase text-white truncate">
-            {lead.razao_social || 'Sem razão social'}
-          </h3>
+const STATUS_LEAD = {
+  NOVO: 'Novo',
+  TRIAGEM: 'Triagem',
+  EM_PROSPECCAO: 'Em Prospecção'
+};
 
-          <span className="text-[9px] bg-blue-900/20 px-2 py-1 rounded text-blue-300 font-bold border border-blue-500/10 uppercase w-fit">
-            {lead.cnpj || 'Sem CNPJ'}
-          </span>
+const MODULOS = {
+  TODO: 'todo',
+  PESCARIA: 'pescaria'
+};
 
-          {lead.bairro && (
-            <span className="text-[9px] bg-zinc-800 px-2 py-1 rounded text-zinc-400 font-bold border border-white/5 uppercase w-fit">
-              {lead.bairro}
-            </span>
-          )}
-        </div>
+const ABAS = {
+  ESTOQUE: 'estoque',
+  TRIAGEM: 'triagem'
+};
 
-        <div className="mt-2 flex flex-wrap gap-2">
-          <span className="text-[9px] text-zinc-500 uppercase">
-            {lead.nome_fantasia || 'Sem nome fantasia'}
-          </span>
+const ITENS_POR_PAGINA = 50;
 
-          <span className="text-[9px] text-orange-400 uppercase truncate max-w-[280px]">
-            {lead.cnae_principal_descricao || 'Sem CNAE'}
-          </span>
-        </div>
+const normalizarCNPJ = (cnpj) => String(cnpj || '').replace(/\D/g, '');
+
+const formatarCNPJ = (cnpj) => {
+  const limpo = normalizarCNPJ(cnpj);
+  if (limpo.length !== 14) return cnpj;
+  return limpo.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+};
+export default function VendedorTRR_Master() {
+  const [leads, setLeads] = useState([]);
+  const [aba, setAba] = useState(ABAS.ESTOQUE);
+  const [moduloAtivo, setModuloAtivo] = useState(MODULOS.TODO);
+  const [buscaGlobal, setBuscaGlobal] = useState('');
+  const [paginaAtual, setPaginaAtual] = useState(1);
+  const [leadVisualizando, setLeadVisualizando] = useState(null);
+
+  const sincronizar = useCallback(async () => {
+    const { data } = await supabase
+      .from('empresas_mestre')
+      .select('*')
+      .order('razao_social', { ascending: true });
+
+    setLeads(data || []);
+  }, []);
+
+  useEffect(() => {
+    sincronizar();
+  }, [sincronizar]);
+
+  const leadsFiltrados = useMemo(() => {
+    if (!buscaGlobal) return leads;
+    return leads.filter(l =>
+      JSON.stringify(l).toLowerCase().includes(buscaGlobal.toLowerCase())
+    );
+  }, [leads, buscaGlobal]);
+
+  const totalPaginas = Math.ceil(leadsFiltrados.length / ITENS_POR_PAGINA);
+
+  const leadsPaginados = useMemo(() => {
+    const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
+    return leadsFiltrados.slice(inicio, inicio + ITENS_POR_PAGINA);
+  }, [leadsFiltrados, paginaAtual]);
+
+  const moverLead = async (lead) => {
+    await supabase
+      .from('empresas_mestre')
+      .update({ status_lead: STATUS_LEAD.TRIAGEM })
+      .eq('cnpj', lead.cnpj);
+
+    sincronizar();
+  };
+    return (
+    <div className="min-h-screen bg-black text-white p-4">
+
+      <input
+        value={buscaGlobal}
+        onChange={(e) => setBuscaGlobal(e.target.value)}
+        placeholder="Buscar..."
+        className="w-full p-3 bg-zinc-900 rounded-xl mb-4"
+      />
+
+      {leadVisualizando && (
+        <LeadVisualModal
+          lead={leadVisualizando}
+          onClose={() => setLeadVisualizando(null)}
+        />
+      )}
+
+      <div className="space-y-2">
+        {leadsPaginados.map((lead) => (
+          aba === ABAS.TRIAGEM ? (
+            <TriagemLeadRow
+              key={lead.cnpj}
+              lead={lead}
+              onVisualizar={setLeadVisualizando}
+              onIncrementar={() => alert('incrementar')}
+              onCadastrar={() => alert('pdf')}
+              onMesaDeTrabalho={moverLead}
+              onEstoque={() => alert('estoque')}
+              onDeletar={() => alert('deletar')}
+            />
+          ) : (
+            <div key={lead.cnpj} className="bg-zinc-900 p-3 rounded-xl flex justify-between">
+              <span>{lead.razao_social}</span>
+              <button onClick={() => moverLead(lead)}>➡️</button>
+            </div>
+          )
+        ))}
       </div>
 
-      <div className="flex flex-wrap gap-2 lg:justify-end">
-        <button
-          onClick={() => onVisualizar(lead)}
-          className="text-[9px] bg-zinc-800 px-3 py-2 rounded-full font-bold border border-white/10"
-        >
-          VISUALIZAR
-        </button>
-
-        <button
-          onClick={() => onIncrementar(lead)}
-          className="text-[9px] bg-emerald-700 px-3 py-2 rounded-full font-bold"
-        >
-          INCREMENTAR
-        </button>
-
-        <button
-          onClick={() => onCadastrar(lead)}
-          className="text-[9px] bg-cyan-700 px-3 py-2 rounded-full font-bold"
-        >
-          CADASTRAR
-        </button>
-
-        <button
-          onClick={() => onMesaDeTrabalho(lead)}
-          className="text-[9px] bg-blue-700 px-3 py-2 rounded-full font-bold"
-        >
-          MESA DE TRABALHO
-        </button>
-
-        <button
-          onClick={() => onEstoque(lead)}
-          className="text-[9px] bg-amber-700 px-3 py-2 rounded-full font-bold"
-        >
-          ESTOQUE
-        </button>
-
-        <button
-          onClick={() => onDeletar(lead)}
-          className="text-[9px] bg-red-700 px-3 py-2 rounded-full font-bold"
-        >
-          DELETAR
-        </button>
-      </div>
     </div>
   );
 }
