@@ -17,6 +17,7 @@ export default function VendedorTRR_Master() {
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const [totalAbsoluto, setTotalAbsoluto] = useState(0);
   const [ultimosCnpjsProcessados, setUltimosCnpjsProcessados] = useState([]);
+  const [ultimosCnpjsFalhados, setUltimosCnpjsFalhados] = useState([]);
 
   const [filtrosAtivos, setFiltrosAtivos] = useState({
     razao_social: 'Todos',
@@ -58,6 +59,7 @@ export default function VendedorTRR_Master() {
   }) => {
     let sucesso = 0;
     let ultimoErro = '';
+    const falhados = [];
 
     for (let i = 0; i < itens.length; i += tamanhoLote) {
       const lote = itens.slice(i, i + tamanhoLote);
@@ -70,11 +72,18 @@ export default function VendedorTRR_Master() {
 
       const resultados = await Promise.all(lote.map((item) => processador(item)));
 
-      resultados.forEach((resultado) => {
+      resultados.forEach((resultado, index) => {
         if (resultado && resultado.ok) {
           sucesso++;
-        } else if (resultado && resultado.erro) {
-          ultimoErro = resultado.erro;
+        } else {
+          const cnpjDoItem = lote[index];
+          if (resultado && resultado.erro) {
+            ultimoErro = resultado.erro;
+          }
+          falhados.push({
+            cnpj: cnpjDoItem,
+            erro: resultado?.erro || 'Falha desconhecida'
+          });
         }
       });
 
@@ -84,7 +93,7 @@ export default function VendedorTRR_Master() {
     }
 
     setStatusProcesso('');
-    return { sucesso, ultimoErro };
+    return { sucesso, ultimoErro, falhados };
   };
 
   const sincronizar = async () => {
@@ -316,6 +325,7 @@ export default function VendedorTRR_Master() {
     setResultadoBusca('');
     setErroBusca('');
     setUltimosCnpjsProcessados([]);
+    setUltimosCnpjsFalhados([]);
     setStatusProcesso('Lendo arquivo...');
 
     const reader = new FileReader();
@@ -342,7 +352,7 @@ export default function VendedorTRR_Master() {
 
         setUltimosCnpjsProcessados(cnpjs);
 
-        const { sucesso, ultimoErro } = await processarEmLotes({
+        const { sucesso, ultimoErro, falhados } = await processarEmLotes({
           itens: cnpjs,
           tamanhoLote: 5,
           pausaMs: 300,
@@ -352,10 +362,12 @@ export default function VendedorTRR_Master() {
             processarCNPJ(cnpj, { fonte_lead: `Arquivo: ${file.name}` })
         });
 
+        setUltimosCnpjsFalhados(falhados);
+
         if (sucesso === 0 && ultimoErro) {
           setErroBusca(`Erro no processamento: ${ultimoErro}`);
         } else if (ultimoErro) {
-          setResultadoBusca(`Arquivo concluído: ${sucesso} empresa(s) salva(s). Falha em alguns: ${ultimoErro}`);
+          setResultadoBusca(`Arquivo concluído: ${sucesso} empresa(s) salva(s). Falha em ${falhados.length} CNPJ(s).`);
         } else {
           setResultadoBusca(`Arquivo concluído: ${sucesso} empresa(s) salva(s).`);
         }
@@ -377,6 +389,7 @@ export default function VendedorTRR_Master() {
   const buscarECadastrarCNPJs = async () => {
     setResultadoBusca('');
     setErroBusca('');
+    setUltimosCnpjsFalhados([]);
 
     const cnpjs = extrairCNPJsDoTexto(cnpjBusca);
 
@@ -387,7 +400,7 @@ export default function VendedorTRR_Master() {
 
     setUltimosCnpjsProcessados(cnpjs);
 
-    const { sucesso, ultimoErro } = await processarEmLotes({
+    const { sucesso, ultimoErro, falhados } = await processarEmLotes({
       itens: cnpjs,
       tamanhoLote: 5,
       pausaMs: 300,
@@ -397,13 +410,15 @@ export default function VendedorTRR_Master() {
         processarCNPJ(cnpj, { fonte_lead: 'Busca Manual' })
     });
 
+    setUltimosCnpjsFalhados(falhados);
+
     if (sucesso === 0 && ultimoErro) {
       setErroBusca(`Nenhum CNPJ foi salvo. Motivo: ${ultimoErro}`);
       return;
     }
 
     if (ultimoErro) {
-      setResultadoBusca(`Salvos ${sucesso} de ${cnpjs.length}. Falha em alguns: ${ultimoErro}`);
+      setResultadoBusca(`Salvos ${sucesso} de ${cnpjs.length}. Falha em ${falhados.length} CNPJ(s).`);
     } else {
       setResultadoBusca(`Sucesso: ${sucesso} CNPJ(s) salvo(s).`);
     }
@@ -430,6 +445,7 @@ export default function VendedorTRR_Master() {
                   setErroBusca('');
                   setStatusProcesso('');
                   setUltimosCnpjsProcessados([]);
+                  setUltimosCnpjsFalhados([]);
                 }}
                 className={
                   moduloAtivo === m
@@ -707,6 +723,35 @@ export default function VendedorTRR_Master() {
                     >
                       {formatarCNPJ(cnpj)}
                     </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {ultimosCnpjsFalhados.length > 0 && (
+              <div className="bg-red-900/20 border border-red-500/20 rounded-3xl p-6">
+                <div className="flex justify-between items-center mb-4 gap-4">
+                  <h3 className="text-lg font-black uppercase text-red-300">
+                    CNPJs com falha
+                  </h3>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-red-200">
+                    {ultimosCnpjsFalhados.length} falha(s)
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {ultimosCnpjsFalhados.map((item) => (
+                    <div
+                      key={`${item.cnpj}-${item.erro}`}
+                      className="bg-black/20 border border-red-500/10 rounded-2xl px-4 py-3"
+                    >
+                      <p className="text-[11px] font-black text-red-200">
+                        {formatarCNPJ(item.cnpj)}
+                      </p>
+                      <p className="text-[10px] text-red-300/80 mt-1">
+                        {item.erro}
+                      </p>
+                    </div>
                   ))}
                 </div>
               </div>
