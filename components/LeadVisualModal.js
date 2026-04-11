@@ -1,6 +1,70 @@
 "use client";
 import React, { useEffect } from 'react';
 
+function formatarCNPJ(cnpj) {
+  const limpo = String(cnpj || '').replace(/\D/g, '');
+  if (limpo.length !== 14) return cnpj || 'Não informado';
+  return limpo.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+}
+
+function formatarMoeda(valor) {
+  if (valor === null || valor === undefined || valor === '') return 'Não informado';
+
+  const numero = Number(valor);
+  if (Number.isNaN(numero)) return String(valor);
+
+  return numero.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  });
+}
+
+function formatarData(valor) {
+  if (!valor) return 'Não informado';
+
+  const texto = String(valor).trim();
+  if (!texto) return 'Não informado';
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    const [yyyy, mm, dd] = texto.split('-');
+    return `${dd}/${mm}/${yyyy}`;
+  }
+
+  const data = new Date(texto);
+  if (!Number.isNaN(data.getTime())) {
+    return data.toLocaleString('pt-BR');
+  }
+
+  return texto;
+}
+
+function montarEndereco(lead) {
+  const partes = [
+    lead?.logradouro,
+    lead?.numero,
+    lead?.complemento,
+    lead?.bairro,
+    lead?.municipio,
+    lead?.uf,
+    lead?.cep
+  ].filter(Boolean);
+
+  return partes.length > 0 ? partes.join(', ') : 'Não informado';
+}
+
+function Bloco({ titulo, children }) {
+  return (
+    <section className="bg-zinc-900/70 border border-white/5 rounded-2xl p-4 md:p-5">
+      <h3 className="text-[11px] font-black uppercase tracking-widest text-blue-400 mb-4">
+        {titulo}
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {children}
+      </div>
+    </section>
+  );
+}
+
 function LinhaInfo({ label, value, full = false }) {
   const texto =
     value === null || value === undefined || value === ''
@@ -9,10 +73,10 @@ function LinhaInfo({ label, value, full = false }) {
 
   return (
     <div className={full ? 'md:col-span-2' : ''}>
-      <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1">
+      <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">
         {label}
       </p>
-      <div className="bg-zinc-900 border border-white/5 rounded-xl px-3 py-3 text-[12px] text-white break-words">
+      <div className="bg-black/20 border border-white/5 rounded-xl px-3 py-3 text-[12px] text-white break-words min-h-[46px] flex items-center">
         {texto}
       </div>
     </div>
@@ -58,23 +122,31 @@ export default function LeadVisualModal({
       />
 
       <div className="absolute inset-0 flex items-center justify-center p-4 md:p-6">
-        <div className="w-full max-w-5xl max-h-[92vh] overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl">
+        <div className="w-full max-w-6xl max-h-[94vh] overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl">
           <div className="sticky top-0 z-10 bg-zinc-950/95 backdrop-blur border-b border-white/5 px-5 py-4">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-2">
-                  Visualização do Lead
+                  Painel do Lead
                 </p>
 
                 <h2 className="text-lg md:text-2xl font-black uppercase text-white leading-tight break-words">
                   {lead.razao_social || 'Sem razão social'}
                 </h2>
 
-                {lead.nome_fantasia && lead.nome_fantasia !== lead.razao_social && (
-                  <p className="text-[12px] text-zinc-400 mt-1 break-words">
-                    Fantasia: {lead.nome_fantasia}
-                  </p>
-                )}
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <span className="text-[10px] bg-blue-900/20 px-3 py-1 rounded-full text-blue-300 font-black border border-blue-500/10">
+                    {formatarCNPJ(lead.cnpj)}
+                  </span>
+
+                  <span className="text-[10px] bg-zinc-800 px-3 py-1 rounded-full text-zinc-300 font-black border border-white/5 uppercase">
+                    {lead.status_lead || 'Sem status'}
+                  </span>
+
+                  <span className="text-[10px] bg-emerald-900/20 px-3 py-1 rounded-full text-emerald-300 font-black border border-emerald-500/10 uppercase">
+                    {lead.situacao_cadastral || 'Sem situação'}
+                  </span>
+                </div>
               </div>
 
               <button
@@ -87,66 +159,72 @@ export default function LeadVisualModal({
             </div>
           </div>
 
-          <div className="overflow-y-auto max-h-[calc(92vh-88px)] px-5 py-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="overflow-y-auto max-h-[calc(94vh-94px)] px-5 py-5 space-y-5">
+            <Bloco titulo="Dados da empresa">
               <LinhaInfo label="Razão Social" value={lead.razao_social} full />
               <LinhaInfo label="Nome Fantasia" value={lead.nome_fantasia} full />
-
-              <LinhaInfo label="CNPJ" value={lead.cnpj} />
-              <LinhaInfo label="Status do Lead" value={lead.status_lead} />
-
+              <LinhaInfo label="CNPJ" value={formatarCNPJ(lead.cnpj)} />
               <LinhaInfo label="Situação Cadastral" value={lead.situacao_cadastral} />
+              <LinhaInfo label="Status do Lead" value={lead.status_lead} />
+              <LinhaInfo label="Status do Vendedor" value={lead.status_vendedor} />
               <LinhaInfo label="Fonte do Lead" value={lead.fonte_lead} />
+              <LinhaInfo label="Categoria TRR" value={lead.categoria_trr} />
+              <LinhaInfo label="Porte" value={lead.porte} />
+              <LinhaInfo label="Capital Social" value={formatarMoeda(lead.capital_social)} />
+              <LinhaInfo label="Data de Abertura" value={formatarData(lead.data_abertura)} />
+              <LinhaInfo label="Data Início Atividade" value={formatarData(lead.data_inicio_atividade)} />
+            </Bloco>
 
+            <Bloco titulo="Endereço">
+              <LinhaInfo label="Endereço Completo" value={montarEndereco(lead)} full />
               <LinhaInfo label="Logradouro" value={lead.logradouro} />
               <LinhaInfo label="Número" value={lead.numero} />
-
+              <LinhaInfo label="Complemento" value={lead.complemento} />
               <LinhaInfo label="Bairro" value={lead.bairro} />
               <LinhaInfo label="Município" value={lead.municipio} />
-
               <LinhaInfo label="UF" value={lead.uf} />
               <LinhaInfo label="CEP" value={lead.cep} />
+              <LinhaInfo label="Endereço da Obra" value={lead.endereco_obra} full />
+            </Bloco>
 
-              <LinhaInfo label="Telefone" value={lead.telefone} />
-              <LinhaInfo label="E-mail" value={lead.email} />
+            <Bloco titulo="Contatos">
+              <LinhaInfo label="Telefone 1" value={lead.telefone_1} />
+              <LinhaInfo label="Telefone 2" value={lead.telefone_2} />
+              <LinhaInfo label="Email" value={lead.email} full />
+              <LinhaInfo label="Nome do Contato" value={lead.contato_nome} />
+              <LinhaInfo label="Inscrição Estadual" value={lead.inscricao_estadual} />
+              <LinhaInfo label="Inscrição Municipal" value={lead.inscricao_municipal} />
+            </Bloco>
 
-              <LinhaInfo label="Responsável" value={lead.responsavel} />
-              <LinhaInfo label="Contato" value={lead.contato} />
-
+            <Bloco titulo="CNAE e classificação">
               <LinhaInfo label="CNAE Principal Código" value={lead.cnae_principal_codigo} />
-              <LinhaInfo label="CNAE Principal Descrição" value={lead.cnae_principal_descricao} full />
-
+              <LinhaInfo label="Descrição CNAE" value={lead.descricao_cnae || lead.cnae_principal_descricao} />
+              <LinhaInfo label="CNAE Principal" value={lead.cnae_principal_descricao} full />
               <LinhaInfo label="CNAE Secundário" value={lead.cnae_secundario} full />
+              <LinhaInfo label="Classificação do Fornecedor" value={lead.classificacao_fornecedor} />
+              <LinhaInfo label="Potencial de Consumo" value={lead.potencial_consumo} />
+            </Bloco>
 
+            <Bloco titulo="Triagem e prospecção">
               <LinhaInfo label="Observações" value={lead.observacoes} full />
-              <LinhaInfo label="Anotações" value={lead.anotacoes} full />
+              <LinhaInfo label="Ações de Prospecção" value={lead.acoes_prospeccao} full />
+              <LinhaInfo label="Resultado de Campo" value={lead.resultado_campo} />
+              <LinhaInfo label="Notas de Campo" value={lead.notas_campo} />
+              <LinhaInfo label="Registro de Visita" value={lead.registro_visita} full />
+              <LinhaInfo label="Data Reagendada" value={formatarData(lead.data_reagendada)} />
+              <LinhaInfo label="Observações de Venda" value={lead.observacoes_venda} full />
+            </Bloco>
 
-              <LinhaInfo label="Origem" value={lead.origem} />
-              <LinhaInfo label="Cidade Operação" value={lead.cidade_operacao} />
+            <Bloco titulo="Controle interno">
+              <LinhaInfo label="Última Interação" value={formatarData(lead.ultima_interacao)} />
+              <LinhaInfo label="Data de Captação" value={formatarData(lead.data_captacao)} />
+              <LinhaInfo label="Criado em" value={formatarData(lead.criado_em)} />
+              <LinhaInfo label="Latitude" value={lead.lat} />
+              <LinhaInfo label="Longitude" value={lead.lng} />
+              <LinhaInfo label="ID" value={lead.id} full />
+            </Bloco>
 
-              <LinhaInfo label="Responsável Comercial" value={lead.responsavel_comercial} />
-              <LinhaInfo label="Último Contato" value={lead.ultimo_contato} />
-
-              <LinhaInfo label="Próxima Ação" value={lead.proxima_acao} />
-              <LinhaInfo label="Data Próxima Ação" value={lead.data_proxima_acao} />
-
-              <LinhaInfo label="Volume Estimado" value={lead.volume_estimado} />
-              <LinhaInfo label="Consumo Estimado" value={lead.consumo_estimado} />
-
-              <LinhaInfo label="Segmento" value={lead.segmento} />
-              <LinhaInfo label="Subsegmento" value={lead.subsegmento} />
-
-              <LinhaInfo label="Tags" value={lead.tags} full />
-              <LinhaInfo label="Histórico" value={lead.historico} full />
-
-              <LinhaInfo label="Criado em" value={lead.created_at} />
-              <LinhaInfo label="Atualizado em" value={lead.updated_at} />
-
-              <LinhaInfo label="ID" value={lead.id} />
-              <LinhaInfo label="UUID" value={lead.uuid} />
-            </div>
-
-            <div className="mt-6 flex justify-end">
+            <div className="flex justify-end pt-2">
               <button
                 type="button"
                 onClick={handleClose}
