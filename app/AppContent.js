@@ -126,6 +126,148 @@ const lerArquivoComoTexto = async (file) => {
   });
 };
 
+const valorTexto = (valor, fallback = '') => {
+  if (valor === null || valor === undefined) return fallback;
+  const texto = String(valor).trim();
+  return texto === '' ? fallback : texto;
+};
+
+const valorNumeroTexto = (valor, fallback = '') => {
+  if (valor === null || valor === undefined) return fallback;
+  return String(valor).trim();
+};
+
+const formatarNaturezaJuridica = (codigo, descricao) => {
+  const cod = valorNumeroTexto(codigo, '');
+  const desc = valorTexto(descricao, '');
+
+  if (cod && desc) return `${cod} - ${desc}`;
+  return desc || cod || '';
+};
+
+const formatarCapitalSocial = (valor) => {
+  if (valor === null || valor === undefined || valor === '') return '';
+  return String(valor);
+};
+
+const montarPayloadReceitaSeguro = (leadExistente = {}, info = {}, fontePadrao = 'Busca Manual') => {
+  const descSec = Array.isArray(info.cnaes_secundarios) && info.cnaes_secundarios.length > 0
+    ? info.cnaes_secundarios
+        .map((c) => c?.descricao)
+        .filter(Boolean)
+        .join(' | ')
+    : 'Não informado';
+
+  const payloadBase = {
+    ...leadExistente,
+    cnpj: valorNumeroTexto(info.cnpj, normalizarCNPJ(leadExistente.cnpj)),
+    razao_social: valorTexto(info.razao_social, leadExistente.razao_social || ''),
+    nome_fantasia: valorTexto(
+      info.nome_fantasia,
+      leadExistente.nome_fantasia || info.razao_social || ''
+    ),
+    logradouro: valorTexto(info.logradouro, leadExistente.logradouro || ''),
+    numero: valorTexto(info.numero, leadExistente.numero || ''),
+    bairro: valorTexto(info.bairro, leadExistente.bairro || ''),
+    municipio: valorTexto(info.municipio, leadExistente.municipio || ''),
+    uf: valorTexto(info.uf, leadExistente.uf || ''),
+    cnae_principal_codigo: info.cnae_fiscal ? String(info.cnae_fiscal) : (leadExistente.cnae_principal_codigo || ''),
+    cnae_principal_descricao: valorTexto(
+      info.cnae_fiscal_descricao,
+      leadExistente.cnae_principal_descricao || 'Não informado'
+    ),
+    cnae_secundario: descSec,
+    situacao_cadastral: valorTexto(
+      info.descricao_situacao_cadastral,
+      leadExistente.situacao_cadastral || 'ATIVA'
+    ),
+    status_lead: leadExistente.status_lead || STATUS_LEAD.NOVO,
+    fonte_lead: leadExistente.fonte_lead || fontePadrao
+  };
+
+  const colunasExistentesNoLead = new Set(Object.keys(leadExistente || {}));
+
+  const mapaOpcionalReceita = {
+    descricao_tipo_de_logradouro: info.descricao_tipo_de_logradouro,
+    complemento: info.complemento,
+    cep: info.cep,
+    ddd_telefone_1: info.ddd_telefone_1,
+    telefone_1: info.telefone_1,
+    ddd_telefone_2: info.ddd_telefone_2,
+    telefone_2: info.telefone_2,
+    ddd_fax: info.ddd_fax,
+    fax: info.fax,
+    email: info.email,
+    porte: info.porte,
+    porte_empresa: info.porte,
+    natureza_juridica: formatarNaturezaJuridica(
+      info.codigo_natureza_juridica,
+      info.natureza_juridica
+    ),
+    codigo_natureza_juridica: info.codigo_natureza_juridica,
+    data_inicio_atividade: info.data_inicio_atividade,
+    capital_social: formatarCapitalSocial(info.capital_social),
+    descricao_identificador_matriz_filial: info.descricao_identificador_matriz_filial,
+    identificador_matriz_filial: info.identificador_matriz_filial,
+    razao_social_responsavel_federativo: info.razao_social_responsavel_federativo,
+    codigo_municipio_ibge: info.codigo_municipio_ibge,
+    codigo_pais: info.codigo_pais,
+    pais: info.pais,
+    qsa: Array.isArray(info.qsa) ? JSON.stringify(info.qsa) : info.qsa,
+    socios: Array.isArray(info.qsa) ? JSON.stringify(info.qsa) : info.qsa,
+    simples: info.simples ? JSON.stringify(info.simples) : info.simples,
+    mei: info.simei ? JSON.stringify(info.simei) : info.mei,
+    simei: info.simei ? JSON.stringify(info.simei) : info.simei,
+    data_situacao_cadastral: info.data_situacao_cadastral,
+    motivo_situacao_cadastral: info.motivo_situacao_cadastral,
+    cnae_fiscal: info.cnae_fiscal ? String(info.cnae_fiscal) : '',
+    cnaes_secundarios_raw: Array.isArray(info.cnaes_secundarios)
+      ? JSON.stringify(info.cnaes_secundarios)
+      : info.cnaes_secundarios
+  };
+
+  Object.entries(mapaOpcionalReceita).forEach(([coluna, valor]) => {
+    if (colunasExistentesNoLead.has(coluna)) {
+      payloadBase[coluna] = valor === undefined || valor === null
+        ? (leadExistente[coluna] ?? '')
+        : valor;
+    }
+  });
+
+  if (colunasExistentesNoLead.has('telefone')) {
+    const ddd1 = valorNumeroTexto(info.ddd_telefone_1, '');
+    const tel1 = valorNumeroTexto(info.telefone_1, '');
+    payloadBase.telefone =
+      ddd1 && tel1
+        ? `(${ddd1}) ${tel1}`
+        : (leadExistente.telefone || '');
+  }
+
+  if (colunasExistentesNoLead.has('endereco_completo')) {
+    const partesEndereco = [
+      valorTexto(info.logradouro, ''),
+      valorTexto(info.numero, ''),
+      valorTexto(info.complemento, ''),
+      valorTexto(info.bairro, ''),
+      valorTexto(info.municipio, ''),
+      valorTexto(info.uf, ''),
+      valorTexto(info.cep, '')
+    ].filter(Boolean);
+
+    payloadBase.endereco_completo = partesEndereco.join(', ') || (leadExistente.endereco_completo || '');
+  }
+
+  if (colunasExistentesNoLead.has('dados_receita_json')) {
+    payloadBase.dados_receita_json = info;
+  }
+
+  if (colunasExistentesNoLead.has('dados_receita_texto')) {
+    payloadBase.dados_receita_texto = JSON.stringify(info);
+  }
+
+  return payloadBase;
+};
+
 export default function VendedorTRR_Master() {
   const [leads, setLeads] = useState([]);
   const [aba, setAba] = useState(ABAS.ESTOQUE);
@@ -352,7 +494,7 @@ export default function VendedorTRR_Master() {
     return { sucesso, ultimoErro, falhados };
   }, []);
 
-  const processarCNPJ = useCallback(async (cnpj, leadExistente = {}) => {
+  const processarCNPJ = useCallback(async (cnpj, leadExistente = {}, opcoes = {}) => {
     const cnpjLimpo = normalizarCNPJ(cnpj);
 
     if (cnpjLimpo.length !== 14) {
@@ -365,34 +507,16 @@ export default function VendedorTRR_Master() {
       return { ok: false, erro: consulta.erro };
     }
 
-    const info = consulta.dados;
-
-    const descSec = info.cnaes_secundarios
-      ? info.cnaes_secundarios.map((c) => c.descricao).join(' | ')
-      : 'Não informado';
+    const info = consulta.dados || {};
+    const payload = montarPayloadReceitaSeguro(
+      leadExistente,
+      info,
+      opcoes.fontePadrao || 'Busca Manual'
+    );
 
     const { error } = await supabase
       .from('empresas_mestre')
-      .upsert(
-        {
-          ...leadExistente,
-          cnpj: cnpjLimpo,
-          razao_social: info.razao_social || '',
-          nome_fantasia: info.nome_fantasia || info.razao_social || '',
-          logradouro: info.logradouro || '',
-          numero: info.numero || '',
-          bairro: info.bairro || '',
-          municipio: info.municipio || '',
-          uf: info.uf || '',
-          cnae_principal_codigo: info.cnae_fiscal ? String(info.cnae_fiscal) : '',
-          cnae_principal_descricao: info.cnae_fiscal_descricao || 'Não informado',
-          cnae_secundario: descSec,
-          situacao_cadastral: info.descricao_situacao_cadastral || 'ATIVA',
-          status_lead: leadExistente.status_lead || STATUS_LEAD.NOVO,
-          fonte_lead: leadExistente.fonte_lead || 'Busca Manual'
-        },
-        { onConflict: 'cnpj' }
-      );
+      .upsert(payload, { onConflict: 'cnpj' });
 
     if (error) {
       return { ok: false, erro: `Erro ao salvar no banco: ${error.message}` };
@@ -400,7 +524,8 @@ export default function VendedorTRR_Master() {
 
     return {
       ok: true,
-      situacao: info.descricao_situacao_cadastral
+      situacao: info.descricao_situacao_cadastral,
+      payloadSalvo: payload
     };
   }, []);
 
@@ -546,7 +671,9 @@ export default function VendedorTRR_Master() {
         const lead = leadsFiltrados[i];
         setStatusProcesso(`Verificando ativos ${i + 1} de ${leadsFiltrados.length}: ${lead.razao_social}`);
 
-        const resultado = await processarCNPJ(lead.cnpj, lead);
+        const resultado = await processarCNPJ(lead.cnpj, lead, {
+          fontePadrao: lead.fonte_lead || 'Busca Manual'
+        });
 
         if (resultado && resultado.ok && resultado.situacao !== 'ATIVA') {
           await supabase.from('empresas_mestre').delete().eq('cnpj', lead.cnpj);
@@ -619,37 +746,56 @@ export default function VendedorTRR_Master() {
 
   const atualizarFaltantes = useCallback(async () => {
     limparMensagens();
+    setUltimosCnpjsFalhados([]);
+    setUltimosCnpjsProcessados([]);
 
-    const { data: faltantes, error } = await supabase
-      .from('empresas_mestre')
-      .select('*')
-      .or('cnae_principal_descricao.is.null,cnae_secundario.is.null,cnae_principal_descricao.eq.""');
+    try {
+      const todosLeads = await buscarTodosDoBanco();
 
-    if (error) {
-      setErroBusca(`Erro ao localizar faltantes: ${error.message}`);
-      return;
+      if (!todosLeads || todosLeads.length === 0) {
+        setErroBusca('Nenhum lead encontrado no banco para enriquecer.');
+        return;
+      }
+
+      if (!confirm(`Enriquecer TODOS os ${todosLeads.length} leads do banco? Isso vai reconsultar a Receita e atualizar os dados faltantes.`)) {
+        return;
+      }
+
+      setUltimosCnpjsProcessados(todosLeads.map((lead) => normalizarCNPJ(lead.cnpj)).filter(Boolean));
+
+      const { sucesso, ultimoErro, falhados } = await processarEmLotes({
+        itens: todosLeads,
+        tamanhoLote: 5,
+        pausaMs: 450,
+        mensagemProgresso: (processados, total) => `Enriquecendo ${processados} de ${total} leads do banco...`,
+        processador: async (lead) =>
+          processarCNPJ(lead.cnpj, lead, {
+            fontePadrao: lead.fonte_lead || 'Busca Manual'
+          })
+      });
+
+      setUltimosCnpjsFalhados(falhados);
+
+      if (sucesso === 0 && ultimoErro) {
+        setErroBusca(`Nenhum lead foi enriquecido. Motivo: ${ultimoErro}`);
+        setStatusProcesso('');
+        return;
+      }
+
+      if (falhados.length > 0) {
+        setResultadoBusca(`Enriquecimento concluído: ${sucesso} lead(s) atualizado(s) e ${falhados.length} falha(s).`);
+      } else {
+        setResultadoBusca(`Enriquecimento concluído: ${sucesso} lead(s) atualizado(s).`);
+      }
+
+      setStatusProcesso('');
+      await sincronizar();
+    } catch (error) {
+      console.error('Erro ao enriquecer leads:', error);
+      setStatusProcesso('');
+      setErroBusca(`Erro ao enriquecer leads: ${error.message || 'falha no reprocessamento.'}`);
     }
-
-    if (!faltantes || faltantes.length === 0) {
-      alert('Dados completos!');
-      return;
-    }
-
-    if (!confirm(`Atualizar ${faltantes.length} leads?`)) {
-      return;
-    }
-
-    for (let i = 0; i < faltantes.length; i++) {
-      const lead = faltantes[i];
-      setStatusProcesso(`Atualizando ${i + 1} de ${faltantes.length}`);
-      await processarCNPJ(lead.cnpj, lead);
-      await new Promise((r) => setTimeout(r, 450));
-    }
-
-    setStatusProcesso('');
-    setResultadoBusca(`${faltantes.length} lead(s) reprocessado(s).`);
-    await sincronizar();
-  }, [limparMensagens, processarCNPJ, sincronizar]);
+  }, [buscarTodosDoBanco, limparMensagens, processarCNPJ, processarEmLotes, sincronizar]);
 
   const extrairEPesquisar = useCallback(async (e) => {
     const file = e.target.files?.[0];
@@ -677,7 +823,8 @@ export default function VendedorTRR_Master() {
         tamanhoLote: 5,
         pausaMs: 300,
         mensagemProgresso: (processados, total) => `Processando arquivo: ${processados} de ${total}...`,
-        processador: async (cnpj) => processarCNPJ(cnpj, { fonte_lead: `Arquivo: ${file.name}` })
+        processador: async (cnpj) =>
+          processarCNPJ(cnpj, { fonte_lead: `Arquivo: ${file.name}` }, { fontePadrao: `Arquivo: ${file.name}` })
       });
 
       setUltimosCnpjsFalhados(falhados);
@@ -717,7 +864,8 @@ export default function VendedorTRR_Master() {
       tamanhoLote: 5,
       pausaMs: 300,
       mensagemProgresso: (processados, total) => `Processando ${processados} de ${total}...`,
-      processador: async (cnpj) => processarCNPJ(cnpj, { fonte_lead: 'Busca Manual' })
+      processador: async (cnpj) =>
+        processarCNPJ(cnpj, { fonte_lead: 'Busca Manual' }, { fontePadrao: 'Busca Manual' })
     });
 
     setUltimosCnpjsFalhados(falhados);
