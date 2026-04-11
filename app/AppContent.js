@@ -263,6 +263,7 @@ export default function VendedorTRR_Master() {
   const [buscaDebounced, setBuscaDebounced] = useState('');
   const [leadVisualSelecionado, setLeadVisualSelecionado] = useState(null);
   const [visualModalAberto, setVisualModalAberto] = useState(false);
+  const [debugReceita, setDebugReceita] = useState(null);
 
   const limparMensagens = useCallback(() => {
     setResultadoBusca('');
@@ -295,6 +296,51 @@ export default function VendedorTRR_Master() {
     setVisualModalAberto(false);
     setLeadVisualSelecionado(null);
   }, []);
+
+  const testarCNPJDebug = useCallback(async () => {
+    try {
+      limparMensagens();
+      setDebugReceita({
+        carregando: true,
+        cnpj: CNPJ_DEBUG
+      });
+
+      const res = await consultarCNPJNaBrasilAPI(CNPJ_DEBUG);
+
+      if (!res.ok) {
+        setDebugReceita({
+          carregando: false,
+          erro: res.erro,
+          cnpj: CNPJ_DEBUG
+        });
+        return;
+      }
+
+      const info = res.dados || {};
+
+      setDebugReceita({
+        carregando: false,
+        cnpj: CNPJ_DEBUG,
+        logradouro: info.logradouro || '',
+        numero: info.numero || '',
+        bairro: info.bairro || '',
+        municipio: info.municipio || '',
+        uf: info.uf || '',
+        cep: info.cep || '',
+        complemento: info.complemento || '',
+        telefone_1: info.telefone_1 || '',
+        telefone_2: info.telefone_2 || '',
+        email: info.email || '',
+        bruto: info
+      });
+    } catch (error) {
+      setDebugReceita({
+        carregando: false,
+        cnpj: CNPJ_DEBUG,
+        erro: error.message || 'Falha no teste do CNPJ'
+      });
+    }
+  }, [limparMensagens]);
 
   const prepararDadosPlanilha = useCallback((dados) => {
     return dados.map((lead) => ({
@@ -482,65 +528,27 @@ export default function VendedorTRR_Master() {
 
   const processarCNPJ = useCallback(async (cnpj, leadExistente = {}, opcoes = {}) => {
     const cnpjLimpo = normalizarCNPJ(cnpj);
-    const isDebug = cnpjLimpo === CNPJ_DEBUG;
 
     if (cnpjLimpo.length !== 14) {
       return { ok: false, erro: 'CNPJ inválido' };
     }
 
-    if (isDebug) {
-      console.log('================ DEBUG CNPJ ================');
-      console.log('CNPJ em teste:', cnpjLimpo);
-      console.log('Lead existente antes do enriquecimento:', leadExistente);
-    }
-
     const consulta = await consultarCNPJNaBrasilAPI(cnpjLimpo);
 
-    if (isDebug) {
-      console.log('Resposta completa de consultarCNPJNaBrasilAPI:', consulta);
-    }
-
     if (!consulta.ok) {
-      if (isDebug) {
-        console.log('Falha na consulta do CNPJ debug:', consulta.erro);
-        console.log('============================================');
-      }
       return { ok: false, erro: consulta.erro };
     }
 
     const info = consulta.dados || {};
-
-    if (isDebug) {
-      console.log('Dados brutos retornados pela API:', info);
-      console.log('logradouro retornado:', info.logradouro);
-      console.log('numero retornado:', info.numero);
-      console.log('bairro retornado:', info.bairro);
-      console.log('municipio retornado:', info.municipio);
-      console.log('uf retornado:', info.uf);
-      console.log('cep retornado:', info.cep);
-    }
-
     const payload = montarPayloadReceita(
       leadExistente,
       info,
       opcoes.fontePadrao || 'Busca Manual'
     );
 
-    if (isDebug) {
-      console.log('Payload final enviado ao Supabase:', payload);
-      console.log('Payload.logradouro:', payload.logradouro);
-      console.log('Payload.numero:', payload.numero);
-    }
-
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('empresas_mestre')
-      .upsert(payload, { onConflict: 'cnpj' })
-      .select();
-
-    if (isDebug) {
-      console.log('Resultado do upsert no Supabase:', { data, error });
-      console.log('============================================');
-    }
+      .upsert(payload, { onConflict: 'cnpj' });
 
     if (error) {
       return { ok: false, erro: `Erro ao salvar no banco: ${error.message}` };
@@ -1036,6 +1044,13 @@ export default function VendedorTRR_Master() {
                 </button>
 
                 <button
+                  onClick={testarCNPJDebug}
+                  className="text-[9px] bg-yellow-600 px-4 py-2 rounded-full font-bold text-black"
+                >
+                  🧪 TESTAR CNPJ
+                </button>
+
+                <button
                   onClick={() => setMostrarExportacao(!mostrarExportacao)}
                   className="text-[9px] bg-blue-700 px-4 py-2 rounded-full font-bold border border-blue-400/20"
                 >
@@ -1188,6 +1203,84 @@ export default function VendedorTRR_Master() {
             >
               OK
             </button>
+          </div>
+        )}
+
+        {debugReceita && (
+          <div className="bg-yellow-900/20 border border-yellow-500/40 p-4 rounded-2xl mb-6 text-yellow-200">
+            <div className="flex justify-between items-start gap-3 mb-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-yellow-300">
+                  Debug do CNPJ
+                </p>
+                <p className="text-sm font-bold">{formatarCNPJ(debugReceita.cnpj || CNPJ_DEBUG)}</p>
+              </div>
+
+              <button
+                onClick={() => setDebugReceita(null)}
+                className="bg-yellow-500/20 px-3 py-1 rounded-full text-[10px] font-bold"
+              >
+                FECHAR
+              </button>
+            </div>
+
+            {debugReceita.carregando ? (
+              <p className="text-sm">Consultando Receita...</p>
+            ) : debugReceita.erro ? (
+              <p className="text-sm">Erro: {debugReceita.erro}</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div className="bg-black/20 rounded-xl p-3">
+                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">Logradouro</p>
+                  <p>{debugReceita.logradouro || 'NÃO VEIO'}</p>
+                </div>
+
+                <div className="bg-black/20 rounded-xl p-3">
+                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">Número</p>
+                  <p>{debugReceita.numero || 'NÃO VEIO'}</p>
+                </div>
+
+                <div className="bg-black/20 rounded-xl p-3">
+                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">Bairro</p>
+                  <p>{debugReceita.bairro || 'NÃO VEIO'}</p>
+                </div>
+
+                <div className="bg-black/20 rounded-xl p-3">
+                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">Município</p>
+                  <p>{debugReceita.municipio || 'NÃO VEIO'}</p>
+                </div>
+
+                <div className="bg-black/20 rounded-xl p-3">
+                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">UF</p>
+                  <p>{debugReceita.uf || 'NÃO VEIO'}</p>
+                </div>
+
+                <div className="bg-black/20 rounded-xl p-3">
+                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">CEP</p>
+                  <p>{debugReceita.cep || 'NÃO VEIO'}</p>
+                </div>
+
+                <div className="bg-black/20 rounded-xl p-3">
+                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">Complemento</p>
+                  <p>{debugReceita.complemento || 'NÃO VEIO'}</p>
+                </div>
+
+                <div className="bg-black/20 rounded-xl p-3">
+                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">Telefone 1</p>
+                  <p>{debugReceita.telefone_1 || 'NÃO VEIO'}</p>
+                </div>
+
+                <div className="bg-black/20 rounded-xl p-3">
+                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">Telefone 2</p>
+                  <p>{debugReceita.telefone_2 || 'NÃO VEIO'}</p>
+                </div>
+
+                <div className="bg-black/20 rounded-xl p-3 md:col-span-2">
+                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">Email</p>
+                  <p>{debugReceita.email || 'NÃO VEIO'}</p>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
