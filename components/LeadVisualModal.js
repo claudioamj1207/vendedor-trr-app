@@ -52,6 +52,60 @@ function montarEndereco(lead) {
   return partes.length > 0 ? partes.join(', ') : 'Não informado';
 }
 
+function montarEnderecoConsulta(lead) {
+  const partes = [
+    lead?.logradouro,
+    lead?.numero,
+    lead?.bairro,
+    lead?.municipio,
+    lead?.uf,
+    lead?.cep
+  ].filter(Boolean);
+
+  return partes.join(', ');
+}
+
+async function copiarTexto(texto) {
+  if (!texto) return;
+
+  try {
+    await navigator.clipboard.writeText(texto);
+  } catch (error) {
+    const input = document.createElement('textarea');
+    input.value = texto;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+  }
+}
+
+function abrirRotaWaze(lead) {
+  const endereco = montarEnderecoConsulta(lead);
+
+  if (!endereco) {
+    window.alert('Este lead não tem endereço suficiente para abrir rota.');
+    return;
+  }
+
+  const destino = encodeURIComponent(endereco);
+  const wazeUrl = `https://www.waze.com/ul?q=${destino}&navigate=yes`;
+  window.open(wazeUrl, '_blank', 'noopener,noreferrer');
+}
+
+function abrirRotaMaps(lead) {
+  const endereco = montarEnderecoConsulta(lead);
+
+  if (!endereco) {
+    window.alert('Este lead não tem endereço suficiente para abrir rota.');
+    return;
+  }
+
+  const destino = encodeURIComponent(endereco);
+  const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${destino}`;
+  window.open(mapsUrl, '_blank', 'noopener,noreferrer');
+}
+
 function Bloco({ titulo, children }) {
   return (
     <section className="bg-zinc-900/70 border border-white/5 rounded-2xl p-4 md:p-5">
@@ -65,7 +119,7 @@ function Bloco({ titulo, children }) {
   );
 }
 
-function LinhaInfo({ label, value, full = false }) {
+function LinhaInfo({ label, value, full = false, actions = null }) {
   const texto =
     value === null || value === undefined || value === ''
       ? 'Não informado'
@@ -73,9 +127,13 @@ function LinhaInfo({ label, value, full = false }) {
 
   return (
     <div className={full ? 'md:col-span-2' : ''}>
-      <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">
-        {label}
-      </p>
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+          {label}
+        </p>
+        {actions}
+      </div>
+
       <div className="bg-black/20 border border-white/5 rounded-xl px-3 py-3 text-[12px] text-white break-words min-h-[46px] flex items-center">
         {texto}
       </div>
@@ -176,6 +234,8 @@ export default function LeadVisualModal({
 
   if (!modalAberto || !lead) return null;
 
+  const cnpjLimpo = String(lead.cnpj || '').replace(/\D/g, '');
+
   return (
     <div className="fixed inset-0 z-[9999]">
       <div
@@ -201,6 +261,30 @@ export default function LeadVisualModal({
                     {formatarCNPJ(lead.cnpj)}
                   </span>
 
+                  <button
+                    type="button"
+                    onClick={() => copiarTexto(cnpjLimpo)}
+                    className="text-[10px] bg-blue-900/20 px-3 py-1 rounded-full text-blue-300 font-black border border-blue-500/10 hover:bg-blue-800/30"
+                  >
+                    Copiar CNPJ
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => abrirRotaWaze(lead)}
+                    className="text-[10px] bg-emerald-900/20 px-3 py-1 rounded-full text-emerald-300 font-black border border-emerald-500/10 hover:bg-emerald-800/30"
+                  >
+                    Waze
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => abrirRotaMaps(lead)}
+                    className="text-[10px] bg-cyan-900/20 px-3 py-1 rounded-full text-cyan-300 font-black border border-cyan-500/10 hover:bg-cyan-800/30"
+                  >
+                    Maps
+                  </button>
+
                   <span className="text-[10px] bg-zinc-800 px-3 py-1 rounded-full text-zinc-300 font-black border border-white/5 uppercase">
                     {lead.status_lead || 'Sem status'}
                   </span>
@@ -225,7 +309,19 @@ export default function LeadVisualModal({
             <Bloco titulo="Dados da empresa">
               <LinhaInfo label="Razão Social" value={lead.razao_social} full />
               <LinhaInfo label="Nome Fantasia" value={lead.nome_fantasia} full />
-              <LinhaInfo label="CNPJ" value={formatarCNPJ(lead.cnpj)} />
+              <LinhaInfo
+                label="CNPJ"
+                value={formatarCNPJ(lead.cnpj)}
+                actions={
+                  <button
+                    type="button"
+                    onClick={() => copiarTexto(cnpjLimpo)}
+                    className="text-[9px] px-2 py-1 rounded-md bg-blue-900/20 text-blue-300 font-black border border-blue-500/10 hover:bg-blue-800/30"
+                  >
+                    Copiar
+                  </button>
+                }
+              />
               <LinhaInfo label="Situação Cadastral" value={lead.situacao_cadastral} />
               <LinhaInfo label="Status do Lead" value={lead.status_lead} />
               <LinhaInfo label="Status do Vendedor" value={lead.status_vendedor} />
@@ -238,7 +334,29 @@ export default function LeadVisualModal({
             </Bloco>
 
             <Bloco titulo="Endereço">
-              <LinhaInfo label="Endereço Completo" value={montarEndereco(lead)} full />
+              <LinhaInfo
+                label="Endereço Completo"
+                value={montarEndereco(lead)}
+                full
+                actions={
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => abrirRotaWaze(lead)}
+                      className="text-[9px] px-2 py-1 rounded-md bg-emerald-900/20 text-emerald-300 font-black border border-emerald-500/10 hover:bg-emerald-800/30"
+                    >
+                      Waze
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => abrirRotaMaps(lead)}
+                      className="text-[9px] px-2 py-1 rounded-md bg-cyan-900/20 text-cyan-300 font-black border border-cyan-500/10 hover:bg-cyan-800/30"
+                    >
+                      Maps
+                    </button>
+                  </div>
+                }
+              />
               <LinhaInfo label="Logradouro" value={lead.logradouro} />
               <LinhaInfo label="Número" value={lead.numero} />
               <LinhaInfo label="Complemento" value={lead.complemento} />
