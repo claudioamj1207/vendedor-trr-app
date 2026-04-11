@@ -19,7 +19,7 @@ async function copiarTexto(texto) {
 
   try {
     await navigator.clipboard.writeText(texto);
-  } catch (error) {
+  } catch {
     const input = document.createElement('textarea');
     input.value = texto;
     document.body.appendChild(input);
@@ -33,13 +33,14 @@ function abrirRota(lead) {
   const endereco = montarEnderecoConsulta(lead);
 
   if (!endereco) {
-    window.alert('Este lead não tem endereço suficiente para abrir rota.');
+    alert('Lead sem endereço suficiente');
     return;
   }
 
   const destino = encodeURIComponent(endereco);
-  const wazeUrl = `https://www.waze.com/ul?q=${destino}&navigate=yes`;
-  window.open(wazeUrl, '_blank', 'noopener,noreferrer');
+  const url = `https://www.waze.com/ul?q=${destino}&navigate=yes`;
+
+  window.open(url, '_blank');
 }
 
 export default function LeadActionRow({
@@ -55,6 +56,8 @@ export default function LeadActionRow({
   return (
     <div className="px-4 py-3 hover:bg-zinc-800/40 transition-colors border-b border-zinc-800/50">
       <div className="flex items-center justify-between gap-4">
+
+        {/* INFO */}
         <div className="flex-1 min-w-0">
           <h3 className="text-[12px] md:text-[13px] font-bold uppercase text-white truncate">
             {lead?.razao_social || 'SEM RAZÃO SOCIAL'}
@@ -66,21 +69,10 @@ export default function LeadActionRow({
             </span>
 
             <button
-              type="button"
               onClick={() => copiarTexto(cnpjLimpo)}
-              title="Copiar CNPJ"
               className="px-2 py-0.5 text-[9px] rounded-md bg-blue-900/20 text-blue-300 font-black border border-blue-500/10 hover:bg-blue-800/30"
             >
               COPIAR
-            </button>
-
-            <button
-              type="button"
-              onClick={() => abrirRota(lead)}
-              title="Abrir rota"
-              className="px-2 py-0.5 text-[9px] rounded-md bg-emerald-900/20 text-emerald-300 font-black border border-emerald-500/10 hover:bg-emerald-800/30"
-            >
-              ROTA
             </button>
 
             <span className="text-[10px] text-zinc-400 uppercase">
@@ -90,24 +82,23 @@ export default function LeadActionRow({
             <span className="text-[10px] text-zinc-500 uppercase">
               {lead?.municipio || 'SEM MUNICÍPIO'}{lead?.uf ? ` - ${lead.uf}` : ''}
             </span>
-
-            <span className="text-[10px] text-zinc-500 truncate max-w-[240px]">
-              {lead?.cnae_principal_descricao || 'SEM CNAE'}
-            </span>
-
-            {lead?.status_vendedor && (
-              <span className="text-[10px] bg-violet-900/20 px-2.5 py-1 rounded-lg text-violet-300 font-bold border border-violet-500/10">
-                {lead.status_vendedor}
-              </span>
-            )}
           </div>
         </div>
 
+        {/* BOTÕES */}
         <div className="flex gap-1.5 flex-wrap justify-end shrink-0">
+
+          {/* BOTÃO ROTA AGORA AQUI */}
+          <button
+            onClick={() => abrirRota(lead)}
+            className="px-3 py-1.5 text-[10px] rounded-md font-black uppercase bg-emerald-700 text-white hover:bg-emerald-600"
+          >
+            ROTA
+          </button>
+
           {actions.map((action) => (
             <button
               key={action.key}
-              type="button"
               onClick={action.onClick}
               title={action.label}
               className={`px-3 py-1.5 text-[10px] rounded-md font-black uppercase tracking-wide transition-all active:scale-95 ${action.className}`}
@@ -115,6 +106,7 @@ export default function LeadActionRow({
               {action.shortLabel || action.label}
             </button>
           ))}
+
         </div>
       </div>
     </div>
