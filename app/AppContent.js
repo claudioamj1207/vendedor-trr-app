@@ -1453,12 +1453,25 @@ export default function VendedorTRR_Master() {
   return (
     <div className="min-h-screen bg-black text-white pb-40 font-sans antialiased">
       <header className="px-5 pt-8 pb-4 sticky top-0 bg-black/95 border-b border-white/5 z-50">
-        <div className="flex justify-between items-center mb-2">
-          <h1 className="text-[10px] font-black text-blue-500 uppercase italic tracking-widest">
-            Vendedor TRR
-          </h1>
+        <div className="flex justify-between items-center mb-3 gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <img
+              src="/icon.png"
+              alt="Ícone Vendedor TRR"
+              className="w-12 h-12 rounded-2xl object-cover border border-white/10 shadow-lg shrink-0"
+            />
 
-          <div className="flex gap-3 text-[9px] font-bold uppercase">
+            <div className="min-w-0">
+              <h1 className="text-sm md:text-base font-black text-white uppercase tracking-wide truncate">
+                Vendedor TRR
+              </h1>
+              <p className="text-[10px] md:text-[11px] text-zinc-500 uppercase tracking-widest truncate">
+                Sistema de Prospecção
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-3 text-[9px] font-bold uppercase shrink-0">
             {[MODULOS.TODO, MODULOS.PESCARIA].map((m) => (
               <button
                 key={m}
