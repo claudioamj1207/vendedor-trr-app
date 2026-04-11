@@ -4,8 +4,8 @@ import { supabase } from '../lib/supabase';
 import { consultarCNPJNaBrasilAPI } from '../lib/brasilApi';
 import * as XLSX from 'xlsx';
 import LeadVisualModal from '../components/LeadVisualModal';
-import TriagemLeadRow from '../components/TriagemLeadRow';
 import IncrementarLeadModal from '../components/IncrementarLeadModal';
+import LeadActionRow from '../components/LeadActionRow';
 
 const STATUS_LEAD = {
   NOVO: 'Novo',
@@ -30,29 +30,49 @@ const FILTROS_INICIAIS = {
   nome_fantasia: 'Todos',
   cnpj: 'Todos',
   bairro: 'Todos',
+  municipio: 'Todos',
+  uf: 'Todos',
   fonte_lead: 'Todos',
   cnae_principal_descricao: 'Todos',
-  cnae_secundario: 'Todos'
+  cnae_secundario: 'Todos',
+  situacao_cadastral: 'Todos',
+  status_vendedor: 'Todos',
+  porte: 'Todos',
+  categoria_trr: 'Todos',
+  potencial_consumo: 'Todos',
+  contato_nome: 'Todos',
+  inscricao_estadual: 'Todos',
+  inscricao_municipal: 'Todos',
+  email: 'Todos'
 };
+
+const BUSCAS_OPCOES_INICIAIS = Object.keys(FILTROS_INICIAIS).reduce((acc, chave) => {
+  acc[chave] = '';
+  return acc;
+}, {});
 
 const CAMPOS_FILTRO = [
   { label: 'Razão Social', campo: 'razao_social' },
   { label: 'Nome Fantasia', campo: 'nome_fantasia' },
   { label: 'CNPJ', campo: 'cnpj' },
   { label: 'Bairro', campo: 'bairro' },
+  { label: 'Município', campo: 'municipio' },
+  { label: 'UF', campo: 'uf' },
   { label: 'Fonte', campo: 'fonte_lead' },
-  { label: 'CNAE Principal', campo: 'cnae_principal_descricao' }
+  { label: 'CNAE Principal', campo: 'cnae_principal_descricao' },
+  { label: 'CNAE Secundário', campo: 'cnae_secundario' },
+  { label: 'Situação Cadastral', campo: 'situacao_cadastral' },
+  { label: 'Status Vendedor', campo: 'status_vendedor' },
+  { label: 'Porte', campo: 'porte' },
+  { label: 'Categoria TRR', campo: 'categoria_trr' },
+  { label: 'Potencial Consumo', campo: 'potencial_consumo' },
+  { label: 'Contato', campo: 'contato_nome' },
+  { label: 'Inscrição Estadual', campo: 'inscricao_estadual' },
+  { label: 'Inscrição Municipal', campo: 'inscricao_municipal' },
+  { label: 'Email', campo: 'email' }
 ];
 
-const CAMPOS_COM_BUSCA_EXATA = [
-  'razao_social',
-  'nome_fantasia',
-  'cnpj',
-  'bairro',
-  'fonte_lead',
-  'cnae_principal_descricao'
-];
-
+const CAMPOS_COM_BUSCA_EXATA = Object.keys(FILTROS_INICIAIS);
 const ITENS_POR_PAGINA = 50;
 
 const normalizarCNPJ = (cnpj) => String(cnpj || '').replace(/\D/g, '');
@@ -340,6 +360,7 @@ export default function VendedorTRR_Master() {
   const [ultimosCnpjsFalhados, setUltimosCnpjsFalhados] = useState([]);
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [filtrosAtivos, setFiltrosAtivos] = useState(FILTROS_INICIAIS);
+  const [buscaOpcoesFiltro, setBuscaOpcoesFiltro] = useState(BUSCAS_OPCOES_INICIAIS);
   const [buscaDebounced, setBuscaDebounced] = useState('');
   const [leadVisualSelecionado, setLeadVisualSelecionado] = useState(null);
   const [visualModalAberto, setVisualModalAberto] = useState(false);
@@ -365,8 +386,16 @@ export default function VendedorTRR_Master() {
     }));
   }, []);
 
+  const atualizarBuscaOpcaoFiltro = useCallback((campo, valor) => {
+    setBuscaOpcoesFiltro((prev) => ({
+      ...prev,
+      [campo]: valor
+    }));
+  }, []);
+
   const limparFiltros = useCallback(() => {
     setFiltrosAtivos(FILTROS_INICIAIS);
+    setBuscaOpcoesFiltro(BUSCAS_OPCOES_INICIAIS);
   }, []);
 
   const abrirVisualizacaoLead = useCallback((lead) => {
@@ -480,16 +509,13 @@ export default function VendedorTRR_Master() {
       }
 
       for (const campo of CAMPOS_COM_BUSCA_EXATA) {
-        if (filtrosAtivos[campo] !== 'Todos' && lead[campo] !== filtrosAtivos[campo]) {
-          return false;
+        const filtro = filtrosAtivos[campo];
+        if (filtro !== 'Todos') {
+          const valorLead = String(lead[campo] || '');
+          if (valorLead !== filtro) {
+            return false;
+          }
         }
-      }
-
-      if (
-        filtrosAtivos.cnae_secundario !== 'Todos' &&
-        !(lead.cnae_secundario && String(lead.cnae_secundario).includes(filtrosAtivos.cnae_secundario))
-      ) {
-        return false;
       }
 
       return true;
@@ -684,11 +710,26 @@ export default function VendedorTRR_Master() {
     const opcoes = {};
 
     CAMPOS_COM_BUSCA_EXATA.forEach((campo) => {
-      opcoes[campo] = ['Todos', ...new Set(leads.map((lead) => lead[campo]).filter(Boolean))].sort();
+      const termo = String(buscaOpcoesFiltro[campo] || '').toLowerCase();
+
+      const valores = [
+        'Todos',
+        ...new Set(
+          leads
+            .map((lead) => String(lead[campo] || '').trim())
+            .filter(Boolean)
+        )
+      ].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+      opcoes[campo] = valores.filter((valor) => {
+        if (valor === 'Todos') return true;
+        if (!termo) return true;
+        return valor.toLowerCase().includes(termo);
+      });
     });
 
     return opcoes;
-  }, [leads]);
+  }, [leads, buscaOpcoesFiltro]);
 
   const totalPaginas = useMemo(
     () => Math.max(1, Math.ceil(leadsFiltrados.length / ITENS_POR_PAGINA)),
@@ -887,6 +928,28 @@ export default function VendedorTRR_Master() {
       setErroBusca(`Erro ao gerar PDF: ${error.message || 'falha na geração.'}`);
     }
   }, [limparMensagens]);
+
+  const enviarParaTriagem = useCallback(async (lead) => {
+    try {
+      limparMensagens();
+
+      const { error } = await supabase
+        .from('empresas_mestre')
+        .update({
+          status_lead: STATUS_LEAD.TRIAGEM,
+          ultima_interacao: new Date().toISOString()
+        })
+        .eq('cnpj', lead.cnpj);
+
+      if (error) throw error;
+
+      setResultadoBusca('Lead enviado para Triagem com sucesso.');
+      await sincronizar();
+    } catch (error) {
+      console.error('Erro ao enviar para triagem:', error);
+      setErroBusca(`Erro ao enviar para Triagem: ${error.message || 'falha ao atualizar.'}`);
+    }
+  }, [limparMensagens, sincronizar]);
 
   const enviarParaMesaDeTrabalho = useCallback(async (lead) => {
     try {
@@ -1208,58 +1271,102 @@ export default function VendedorTRR_Master() {
     setPaginaAtual(pagina);
   }, [totalPaginas]);
 
-  const renderLinhaEstoque = useCallback((lead) => {
-    return (
-      <div
-        key={lead.cnpj}
-        className="py-4 px-4 flex justify-between items-center gap-3 hover:bg-zinc-800/40 transition-colors"
-      >
-        <div className="flex-1 min-w-0">
-          <h3 className="text-[12px] font-bold uppercase truncate text-white leading-tight">
-            {lead.razao_social}
-          </h3>
+  const montarAcoesEstoque = useCallback((lead) => ([
+    {
+      key: 'visualizar',
+      label: 'Visualizar',
+      shortLabel: 'VER',
+      onClick: () => abrirVisualizacaoLead(lead),
+      className: 'bg-zinc-800 text-white hover:bg-zinc-700 border border-white/10'
+    },
+    {
+      key: 'incrementar',
+      label: 'Incrementar',
+      shortLabel: '+',
+      onClick: () => incrementarLead(lead),
+      className: 'bg-blue-700 text-white hover:bg-blue-600'
+    },
+    {
+      key: 'cadastrar',
+      label: 'Cadastrar',
+      shortLabel: 'CAD',
+      onClick: () => gerarPdfCadastroLead(lead),
+      className: 'bg-emerald-700 text-white hover:bg-emerald-600'
+    },
+    {
+      key: 'triagem',
+      label: 'Triagem',
+      shortLabel: 'TRI',
+      onClick: () => enviarParaTriagem(lead),
+      className: 'bg-cyan-700 text-white hover:bg-cyan-600'
+    },
+    {
+      key: 'mesa',
+      label: 'Mesa de Trabalho',
+      shortLabel: 'MESA',
+      onClick: () => enviarParaMesaDeTrabalho(lead),
+      className: 'bg-violet-700 text-white hover:bg-violet-600'
+    },
+    {
+      key: 'deletar',
+      label: 'Deletar',
+      shortLabel: 'DEL',
+      onClick: () => deletarLead(lead),
+      className: 'bg-red-700 text-white hover:bg-red-600'
+    }
+  ]), [
+    abrirVisualizacaoLead,
+    incrementarLead,
+    gerarPdfCadastroLead,
+    enviarParaTriagem,
+    enviarParaMesaDeTrabalho,
+    deletarLead
+  ]);
 
-          <div className="flex gap-2 mt-2 flex-wrap">
-            <span className="text-[8px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 font-bold border border-white/5 uppercase">
-              {lead.bairro || 'SEM BAIRRO'}
-            </span>
-
-            <span className="text-[8px] bg-blue-900/20 px-2 py-0.5 rounded text-blue-400 font-bold border border-blue-500/10 uppercase">
-              {formatarCNPJ(lead.cnpj)}
-            </span>
-
-            <span className="text-[8px] bg-orange-900/20 px-2 py-0.5 rounded text-orange-400 font-bold border border-orange-500/10 truncate max-w-[200px]">
-              {lead.cnae_principal_descricao || 'SEM CNAE'}
-            </span>
-          </div>
-        </div>
-
-        <button
-          onClick={() => moverLead(lead)}
-          className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center text-white active:scale-95 transition-all"
-          title="Enviar para triagem"
-        >
-          ➡️
-        </button>
-      </div>
-    );
-  }, [moverLead]);
-
-  const renderLinhaTriagem = useCallback((lead) => {
-    return (
-      <TriagemLeadRow
-        key={lead.cnpj}
-        lead={lead}
-        onVisualizar={() => abrirVisualizacaoLead(lead)}
-        onIncrementar={() => incrementarLead(lead)}
-        onCadastrar={() => gerarPdfCadastroLead(lead)}
-        onMesaDeTrabalho={() => enviarParaMesaDeTrabalho(lead)}
-        onEstoque={() => enviarParaEstoque(lead)}
-        onDeletar={() => deletarLead(lead)}
-        formatarCNPJ={formatarCNPJ}
-      />
-    );
-  }, [
+  const montarAcoesTriagem = useCallback((lead) => ([
+    {
+      key: 'visualizar',
+      label: 'Visualizar',
+      shortLabel: 'VER',
+      onClick: () => abrirVisualizacaoLead(lead),
+      className: 'bg-zinc-800 text-white hover:bg-zinc-700 border border-white/10'
+    },
+    {
+      key: 'incrementar',
+      label: 'Incrementar',
+      shortLabel: '+',
+      onClick: () => incrementarLead(lead),
+      className: 'bg-blue-700 text-white hover:bg-blue-600'
+    },
+    {
+      key: 'cadastrar',
+      label: 'Cadastrar',
+      shortLabel: 'CAD',
+      onClick: () => gerarPdfCadastroLead(lead),
+      className: 'bg-emerald-700 text-white hover:bg-emerald-600'
+    },
+    {
+      key: 'mesa',
+      label: 'Mesa de Trabalho',
+      shortLabel: 'MESA',
+      onClick: () => enviarParaMesaDeTrabalho(lead),
+      className: 'bg-violet-700 text-white hover:bg-violet-600'
+    },
+    {
+      key: 'estoque',
+      label: 'Estoque',
+      shortLabel: 'EST',
+      onClick: () => enviarParaEstoque(lead),
+      className: 'bg-yellow-600 text-black hover:bg-yellow-500'
+    },
+    {
+      key: 'deletar',
+      label: 'Deletar',
+      shortLabel: 'DEL',
+      onClick: () => deletarLead(lead),
+      className: 'bg-red-700 text-white hover:bg-red-600'
+    }
+  ]), [
     abrirVisualizacaoLead,
     incrementarLead,
     gerarPdfCadastroLead,
@@ -1268,64 +1375,73 @@ export default function VendedorTRR_Master() {
     deletarLead
   ]);
 
-  const renderLinhaMesa = useCallback((lead) => {
+  const montarAcoesMesa = useCallback((lead) => ([
+    {
+      key: 'visualizar',
+      label: 'Visualizar',
+      shortLabel: 'VER',
+      onClick: () => abrirVisualizacaoLead(lead),
+      className: 'bg-zinc-800 text-white hover:bg-zinc-700 border border-white/10'
+    },
+    {
+      key: 'incrementar',
+      label: 'Incrementar',
+      shortLabel: '+',
+      onClick: () => incrementarLead(lead),
+      className: 'bg-blue-700 text-white hover:bg-blue-600'
+    },
+    {
+      key: 'cadastrar',
+      label: 'Cadastrar',
+      shortLabel: 'CAD',
+      onClick: () => gerarPdfCadastroLead(lead),
+      className: 'bg-emerald-700 text-white hover:bg-emerald-600'
+    },
+    {
+      key: 'triagem',
+      label: 'Triagem',
+      shortLabel: 'TRI',
+      onClick: () => enviarParaTriagem(lead),
+      className: 'bg-cyan-700 text-white hover:bg-cyan-600'
+    },
+    {
+      key: 'estoque',
+      label: 'Estoque',
+      shortLabel: 'EST',
+      onClick: () => enviarParaEstoque(lead),
+      className: 'bg-yellow-600 text-black hover:bg-yellow-500'
+    },
+    {
+      key: 'deletar',
+      label: 'Deletar',
+      shortLabel: 'DEL',
+      onClick: () => deletarLead(lead),
+      className: 'bg-red-700 text-white hover:bg-red-600'
+    }
+  ]), [
+    abrirVisualizacaoLead,
+    incrementarLead,
+    gerarPdfCadastroLead,
+    enviarParaTriagem,
+    enviarParaEstoque,
+    deletarLead
+  ]);
+
+  const renderLinha = useCallback((lead) => {
+    let actions = [];
+    if (aba === ABAS.ESTOQUE) actions = montarAcoesEstoque(lead);
+    if (aba === ABAS.TRIAGEM) actions = montarAcoesTriagem(lead);
+    if (aba === ABAS.MESA) actions = montarAcoesMesa(lead);
+
     return (
-      <div
+      <LeadActionRow
         key={lead.cnpj}
-        className="py-4 px-4 flex flex-col xl:flex-row xl:items-center gap-4 hover:bg-zinc-800/40 transition-colors"
-      >
-        <div className="flex-1 min-w-0">
-          <h3 className="text-[12px] font-bold uppercase text-white leading-tight break-words">
-            {lead.razao_social}
-          </h3>
-
-          <div className="flex gap-2 mt-2 flex-wrap">
-            <span className="text-[8px] bg-blue-900/20 px-2 py-0.5 rounded text-blue-400 font-bold border border-blue-500/10 uppercase">
-              {formatarCNPJ(lead.cnpj)}
-            </span>
-
-            <span className="text-[8px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-300 font-bold border border-white/5 uppercase">
-              {lead.bairro || 'SEM BAIRRO'}
-            </span>
-
-            <span className="text-[8px] bg-violet-900/20 px-2 py-0.5 rounded text-violet-300 font-bold border border-violet-500/10">
-              {lead.status_vendedor || 'Mesa de Trabalho'}
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <button
-            onClick={() => abrirVisualizacaoLead(lead)}
-            className="h-10 px-3 rounded-xl bg-zinc-800 text-white text-[10px] font-black uppercase border border-white/10 hover:bg-zinc-700 active:scale-95 transition-all"
-          >
-            Visualizar
-          </button>
-
-          <button
-            onClick={() => gerarPdfCadastroLead(lead)}
-            className="h-10 px-3 rounded-xl bg-emerald-700 text-white text-[10px] font-black uppercase hover:bg-emerald-600 active:scale-95 transition-all"
-          >
-            Cadastrar
-          </button>
-
-          <button
-            onClick={() => enviarParaEstoque(lead)}
-            className="h-10 px-3 rounded-xl bg-yellow-600 text-black text-[10px] font-black uppercase hover:bg-yellow-500 active:scale-95 transition-all"
-          >
-            Estoque
-          </button>
-
-          <button
-            onClick={() => deletarLead(lead)}
-            className="h-10 px-3 rounded-xl bg-red-700 text-white text-[10px] font-black uppercase hover:bg-red-600 active:scale-95 transition-all"
-          >
-            Deletar
-          </button>
-        </div>
-      </div>
+        lead={lead}
+        formatarCNPJ={formatarCNPJ}
+        actions={actions}
+      />
     );
-  }, [abrirVisualizacaoLead, deletarLead, enviarParaEstoque, gerarPdfCadastroLead]);
+  }, [aba, montarAcoesEstoque, montarAcoesMesa, montarAcoesTriagem]);
 
   const tituloPrincipal = useMemo(() => {
     if (moduloAtivo === MODULOS.PESCARIA) return 'Pescaria de CNPJ';
@@ -1445,33 +1561,57 @@ export default function VendedorTRR_Master() {
             )}
 
             {mostrarFiltros && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4 bg-zinc-900 rounded-2xl border border-white/5">
-                {CAMPOS_FILTRO.map((filtro) => (
-                  <div key={filtro.campo} className="flex flex-col gap-1">
-                    <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">
-                      {filtro.label}
-                    </label>
-
-                    <select
-                      value={filtrosAtivos[filtro.campo]}
-                      onChange={(e) => atualizarFiltro(filtro.campo, e.target.value)}
-                      className="bg-zinc-800 text-[11px] p-2.5 rounded-lg text-white outline-none"
-                    >
-                      {(opcoesFiltros[filtro.campo] || ['Todos']).map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
+              <div className="bg-zinc-900 rounded-2xl border border-white/5 p-4 space-y-4">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">
+                      Filtros estilo Excel
+                    </p>
+                    <p className="text-[11px] text-zinc-500 mt-1">
+                      Cada campo tem busca de opções e seleção individual.
+                    </p>
                   </div>
-                ))}
 
-                <button
-                  onClick={limparFiltros}
-                  className="lg:col-span-3 text-[9px] font-bold text-red-500 uppercase py-2 bg-red-500/10 rounded-lg"
-                >
-                  Limpar Filtros
-                </button>
+                  <button
+                    onClick={limparFiltros}
+                    className="text-[10px] font-black uppercase px-4 py-2 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20"
+                  >
+                    Limpar Tudo
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {CAMPOS_FILTRO.map((filtro) => (
+                    <div
+                      key={filtro.campo}
+                      className="bg-black/20 border border-white/5 rounded-2xl p-3"
+                    >
+                      <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-2">
+                        {filtro.label}
+                      </label>
+
+                      <input
+                        type="text"
+                        value={buscaOpcoesFiltro[filtro.campo] || ''}
+                        onChange={(e) => atualizarBuscaOpcaoFiltro(filtro.campo, e.target.value)}
+                        placeholder="Buscar opção..."
+                        className="w-full mb-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-[11px] text-white outline-none"
+                      />
+
+                      <select
+                        value={filtrosAtivos[filtro.campo]}
+                        onChange={(e) => atualizarFiltro(filtro.campo, e.target.value)}
+                        className="w-full bg-zinc-800 text-[11px] p-2.5 rounded-lg text-white outline-none border border-white/5"
+                      >
+                        {(opcoesFiltros[filtro.campo] || ['Todos']).map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -1535,7 +1675,7 @@ export default function VendedorTRR_Master() {
 
         {moduloAtivo === MODULOS.TODO && (
           <>
-            <div className="bg-zinc-900/30 border border-white/5 rounded-2xl divide-y divide-zinc-800/50 overflow-hidden">
+            <div className="bg-zinc-900/30 border border-white/5 rounded-2xl overflow-hidden">
               {carregando ? (
                 <div className="text-center py-20 text-[10px] animate-pulse text-zinc-600 font-black uppercase tracking-widest">
                   Sincronizando...
@@ -1544,17 +1684,9 @@ export default function VendedorTRR_Master() {
                 <div className="text-center py-20 text-[10px] text-zinc-600 font-black uppercase tracking-widest">
                   Nenhum lead encontrado
                 </div>
-              ) : aba === ABAS.TRIAGEM ? (
-                <div className="divide-y divide-zinc-800/50">
-                  {leadsPaginados.map((lead) => renderLinhaTriagem(lead))}
-                </div>
-              ) : aba === ABAS.MESA ? (
-                <div className="divide-y divide-zinc-800/50">
-                  {leadsPaginados.map((lead) => renderLinhaMesa(lead))}
-                </div>
               ) : (
                 <div className="divide-y divide-zinc-800/50">
-                  {leadsPaginados.map((lead) => renderLinhaEstoque(lead))}
+                  {leadsPaginados.map((lead) => renderLinha(lead))}
                 </div>
               )}
             </div>
