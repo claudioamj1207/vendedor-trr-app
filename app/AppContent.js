@@ -132,140 +132,132 @@ const valorTexto = (valor, fallback = '') => {
   return texto === '' ? fallback : texto;
 };
 
-const valorNumeroTexto = (valor, fallback = '') => {
-  if (valor === null || valor === undefined) return fallback;
-  return String(valor).trim();
+const limparObjetoParaBanco = (obj = {}) => {
+  const {
+    _busca,
+    cnpj_normalizado,
+    ...resto
+  } = obj || {};
+
+  return resto;
 };
 
-const formatarNaturezaJuridica = (codigo, descricao) => {
-  const cod = valorNumeroTexto(codigo, '');
-  const desc = valorTexto(descricao, '');
+const converterDataBRparaISO = (valor) => {
+  if (!valor) return null;
 
-  if (cod && desc) return `${cod} - ${desc}`;
-  return desc || cod || '';
+  const texto = String(valor).trim();
+
+  if (!texto) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    return texto;
+  }
+
+  const match = texto.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (match) {
+    const [, dd, mm, yyyy] = match;
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  return null;
 };
 
-const formatarCapitalSocial = (valor) => {
-  if (valor === null || valor === undefined || valor === '') return '';
-  return String(valor);
+const converterNumero = (valor) => {
+  if (valor === null || valor === undefined || valor === '') return null;
+
+  if (typeof valor === 'number') return valor;
+
+  const texto = String(valor)
+    .replace(/\./g, '')
+    .replace(',', '.')
+    .trim();
+
+  const numero = Number(texto);
+  return Number.isNaN(numero) ? null : numero;
 };
 
-const montarPayloadReceitaSeguro = (leadExistente = {}, info = {}, fontePadrao = 'Busca Manual') => {
-  const descSec = Array.isArray(info.cnaes_secundarios) && info.cnaes_secundarios.length > 0
-    ? info.cnaes_secundarios
-        .map((c) => c?.descricao)
-        .filter(Boolean)
-        .join(' | ')
-    : 'Não informado';
+const montarCNAESecundario = (cnaesSecundarios) => {
+  if (!Array.isArray(cnaesSecundarios) || cnaesSecundarios.length === 0) {
+    return 'Não informado';
+  }
 
-  const payloadBase = {
-    ...leadExistente,
-    cnpj: valorNumeroTexto(info.cnpj, normalizarCNPJ(leadExistente.cnpj)),
-    razao_social: valorTexto(info.razao_social, leadExistente.razao_social || ''),
-    nome_fantasia: valorTexto(
-      info.nome_fantasia,
-      leadExistente.nome_fantasia || info.razao_social || ''
-    ),
-    logradouro: valorTexto(info.logradouro, leadExistente.logradouro || ''),
-    numero: valorTexto(info.numero, leadExistente.numero || ''),
-    bairro: valorTexto(info.bairro, leadExistente.bairro || ''),
-    municipio: valorTexto(info.municipio, leadExistente.municipio || ''),
-    uf: valorTexto(info.uf, leadExistente.uf || ''),
-    cnae_principal_codigo: info.cnae_fiscal ? String(info.cnae_fiscal) : (leadExistente.cnae_principal_codigo || ''),
-    cnae_principal_descricao: valorTexto(
-      info.cnae_fiscal_descricao,
-      leadExistente.cnae_principal_descricao || 'Não informado'
-    ),
-    cnae_secundario: descSec,
+  return cnaesSecundarios
+    .map((c) => c?.descricao)
+    .filter(Boolean)
+    .join(' | ');
+};
+
+const montarPayloadReceita = (leadExistente = {}, info = {}, fontePadrao = 'Busca Manual') => {
+  const leadBase = limparObjetoParaBanco(leadExistente);
+
+  const payload = {
+    ...leadBase,
+    cnpj: normalizarCNPJ(info.cnpj || leadBase.cnpj || ''),
+    razao_social: valorTexto(info.razao_social, leadBase.razao_social || ''),
+    nome_fantasia: valorTexto(info.nome_fantasia, leadBase.nome_fantasia || info.razao_social || ''),
     situacao_cadastral: valorTexto(
       info.descricao_situacao_cadastral,
-      leadExistente.situacao_cadastral || 'ATIVA'
+      leadBase.situacao_cadastral || 'ATIVA'
     ),
-    status_lead: leadExistente.status_lead || STATUS_LEAD.NOVO,
-    fonte_lead: leadExistente.fonte_lead || fontePadrao
+    data_abertura: converterDataBRparaISO(info.data_inicio_atividade) || leadBase.data_abertura || null,
+    cnae_principal_codigo: info.cnae_fiscal ? String(info.cnae_fiscal) : (leadBase.cnae_principal_codigo || ''),
+    cnae_principal_descricao: valorTexto(
+      info.cnae_fiscal_descricao,
+      leadBase.cnae_principal_descricao || 'Não informado'
+    ),
+    capital_social: converterNumero(info.capital_social) ?? leadBase.capital_social ?? null,
+    logradouro: valorTexto(info.logradouro, leadBase.logradouro || ''),
+    numero: valorTexto(info.numero, leadBase.numero || ''),
+    bairro: valorTexto(info.bairro, leadBase.bairro || ''),
+    municipio: valorTexto(info.municipio, leadBase.municipio || ''),
+    uf: valorTexto(info.uf, leadBase.uf || ''),
+    cep: valorTexto(info.cep, leadBase.cep || ''),
+    telefone_1: valorTexto(
+      info.telefone_1,
+      leadBase.telefone_1 || ''
+    ),
+    telefone_2: valorTexto(
+      info.telefone_2,
+      leadBase.telefone_2 || ''
+    ),
+    email: valorTexto(info.email, leadBase.email || ''),
+    data_inicio_atividade: valorTexto(
+      info.data_inicio_atividade,
+      leadBase.data_inicio_atividade || ''
+    ),
+    complemento: valorTexto(info.complemento, leadBase.complemento || ''),
+    porte: valorTexto(info.porte, leadBase.porte || ''),
+    status_lead: leadBase.status_lead || STATUS_LEAD.NOVO,
+    observacoes: leadBase.observacoes || '',
+    acoes_prospeccao: leadBase.acoes_prospeccao || '',
+    resultado_campo: leadBase.resultado_campo || '',
+    notas_campo: leadBase.notas_campo || '',
+    contato_nome: leadBase.contato_nome || '',
+    inscricao_estadual: leadBase.inscricao_estadual || '',
+    inscricao_municipal: leadBase.inscricao_municipal || '',
+    endereco_obra: leadBase.endereco_obra || '',
+    classificacao_fornecedor: leadBase.classificacao_fornecedor || '',
+    historico_visitas: leadBase.historico_visitas || [],
+    registro_visita: leadBase.registro_visita || '',
+    data_reagendada: leadBase.data_reagendada || null,
+    fonte_lead: leadBase.fonte_lead || fontePadrao,
+    data_captacao: leadBase.data_captacao || null,
+    cnae_secundario: montarCNAESecundario(info.cnaes_secundarios),
+    categoria_trr: leadBase.categoria_trr || '',
+    potencial_consumo: leadBase.potencial_consumo || 'Nao Avaliado',
+    status_vendedor: leadBase.status_vendedor || 'Lead Bruto',
+    ultima_interacao: leadBase.ultima_interacao || null,
+    observacoes_venda: leadBase.observacoes_venda || '',
+    criado_em: leadBase.criado_em || undefined,
+    lat: leadBase.lat ?? null,
+    lng: leadBase.lng ?? null,
+    descricao_cnae: valorTexto(
+      info.cnae_fiscal_descricao,
+      leadBase.descricao_cnae || ''
+    )
   };
 
-  const colunasExistentesNoLead = new Set(Object.keys(leadExistente || {}));
-
-  const mapaOpcionalReceita = {
-    descricao_tipo_de_logradouro: info.descricao_tipo_de_logradouro,
-    complemento: info.complemento,
-    cep: info.cep,
-    ddd_telefone_1: info.ddd_telefone_1,
-    telefone_1: info.telefone_1,
-    ddd_telefone_2: info.ddd_telefone_2,
-    telefone_2: info.telefone_2,
-    ddd_fax: info.ddd_fax,
-    fax: info.fax,
-    email: info.email,
-    porte: info.porte,
-    porte_empresa: info.porte,
-    natureza_juridica: formatarNaturezaJuridica(
-      info.codigo_natureza_juridica,
-      info.natureza_juridica
-    ),
-    codigo_natureza_juridica: info.codigo_natureza_juridica,
-    data_inicio_atividade: info.data_inicio_atividade,
-    capital_social: formatarCapitalSocial(info.capital_social),
-    descricao_identificador_matriz_filial: info.descricao_identificador_matriz_filial,
-    identificador_matriz_filial: info.identificador_matriz_filial,
-    razao_social_responsavel_federativo: info.razao_social_responsavel_federativo,
-    codigo_municipio_ibge: info.codigo_municipio_ibge,
-    codigo_pais: info.codigo_pais,
-    pais: info.pais,
-    qsa: Array.isArray(info.qsa) ? JSON.stringify(info.qsa) : info.qsa,
-    socios: Array.isArray(info.qsa) ? JSON.stringify(info.qsa) : info.qsa,
-    simples: info.simples ? JSON.stringify(info.simples) : info.simples,
-    mei: info.simei ? JSON.stringify(info.simei) : info.mei,
-    simei: info.simei ? JSON.stringify(info.simei) : info.simei,
-    data_situacao_cadastral: info.data_situacao_cadastral,
-    motivo_situacao_cadastral: info.motivo_situacao_cadastral,
-    cnae_fiscal: info.cnae_fiscal ? String(info.cnae_fiscal) : '',
-    cnaes_secundarios_raw: Array.isArray(info.cnaes_secundarios)
-      ? JSON.stringify(info.cnaes_secundarios)
-      : info.cnaes_secundarios
-  };
-
-  Object.entries(mapaOpcionalReceita).forEach(([coluna, valor]) => {
-    if (colunasExistentesNoLead.has(coluna)) {
-      payloadBase[coluna] = valor === undefined || valor === null
-        ? (leadExistente[coluna] ?? '')
-        : valor;
-    }
-  });
-
-  if (colunasExistentesNoLead.has('telefone')) {
-    const ddd1 = valorNumeroTexto(info.ddd_telefone_1, '');
-    const tel1 = valorNumeroTexto(info.telefone_1, '');
-    payloadBase.telefone =
-      ddd1 && tel1
-        ? `(${ddd1}) ${tel1}`
-        : (leadExistente.telefone || '');
-  }
-
-  if (colunasExistentesNoLead.has('endereco_completo')) {
-    const partesEndereco = [
-      valorTexto(info.logradouro, ''),
-      valorTexto(info.numero, ''),
-      valorTexto(info.complemento, ''),
-      valorTexto(info.bairro, ''),
-      valorTexto(info.municipio, ''),
-      valorTexto(info.uf, ''),
-      valorTexto(info.cep, '')
-    ].filter(Boolean);
-
-    payloadBase.endereco_completo = partesEndereco.join(', ') || (leadExistente.endereco_completo || '');
-  }
-
-  if (colunasExistentesNoLead.has('dados_receita_json')) {
-    payloadBase.dados_receita_json = info;
-  }
-
-  if (colunasExistentesNoLead.has('dados_receita_texto')) {
-    payloadBase.dados_receita_texto = JSON.stringify(info);
-  }
-
-  return payloadBase;
+  return payload;
 };
 
 export default function VendedorTRR_Master() {
@@ -334,11 +326,19 @@ export default function VendedorTRR_Master() {
       'Bairro': lead.bairro || '',
       'Município': lead.municipio || '',
       'UF': lead.uf || '',
+      'CEP': lead.cep || '',
+      'Telefone 1': lead.telefone_1 || '',
+      'Telefone 2': lead.telefone_2 || '',
+      'Email': lead.email || '',
       'Fonte do Lead': lead.fonte_lead || '',
       'CNAE Principal': lead.cnae_principal_descricao || '',
       'CNAE Secundário': lead.cnae_secundario || '',
       'Situação Cadastral': lead.situacao_cadastral || '',
-      'Status do Lead': lead.status_lead || ''
+      'Status do Lead': lead.status_lead || '',
+      'Capital Social': lead.capital_social || '',
+      'Porte': lead.porte || '',
+      'Data de Abertura': lead.data_abertura || '',
+      'Data Início Atividade': lead.data_inicio_atividade || ''
     }));
   }, []);
 
@@ -473,7 +473,12 @@ export default function VendedorTRR_Master() {
         if (resultado && resultado.ok) {
           sucesso++;
         } else {
-          const cnpjDoItem = lote[index];
+          const itemAtual = lote[index];
+          const cnpjDoItem =
+            typeof itemAtual === 'string'
+              ? itemAtual
+              : itemAtual?.cnpj || 'Sem CNPJ';
+
           if (resultado && resultado.erro) {
             ultimoErro = resultado.erro;
           }
@@ -508,7 +513,7 @@ export default function VendedorTRR_Master() {
     }
 
     const info = consulta.dados || {};
-    const payload = montarPayloadReceitaSeguro(
+    const payload = montarPayloadReceita(
       leadExistente,
       info,
       opcoes.fontePadrao || 'Busca Manual'
@@ -757,17 +762,20 @@ export default function VendedorTRR_Master() {
         return;
       }
 
-      if (!confirm(`Enriquecer TODOS os ${todosLeads.length} leads do banco? Isso vai reconsultar a Receita e atualizar os dados faltantes.`)) {
+      if (!confirm(`Enriquecer TODOS os ${todosLeads.length} leads do banco? Isso vai reconsultar a Receita e completar os dados faltantes.`)) {
         return;
       }
 
-      setUltimosCnpjsProcessados(todosLeads.map((lead) => normalizarCNPJ(lead.cnpj)).filter(Boolean));
+      setUltimosCnpjsProcessados(
+        todosLeads.map((lead) => normalizarCNPJ(lead.cnpj)).filter(Boolean)
+      );
 
       const { sucesso, ultimoErro, falhados } = await processarEmLotes({
         itens: todosLeads,
         tamanhoLote: 5,
         pausaMs: 450,
-        mensagemProgresso: (processados, total) => `Enriquecendo ${processados} de ${total} leads do banco...`,
+        mensagemProgresso: (processados, total) =>
+          `Enriquecendo ${processados} de ${total} leads do banco...`,
         processador: async (lead) =>
           processarCNPJ(lead.cnpj, lead, {
             fontePadrao: lead.fonte_lead || 'Busca Manual'
@@ -824,7 +832,11 @@ export default function VendedorTRR_Master() {
         pausaMs: 300,
         mensagemProgresso: (processados, total) => `Processando arquivo: ${processados} de ${total}...`,
         processador: async (cnpj) =>
-          processarCNPJ(cnpj, { fonte_lead: `Arquivo: ${file.name}` }, { fontePadrao: `Arquivo: ${file.name}` })
+          processarCNPJ(
+            cnpj,
+            { fonte_lead: `Arquivo: ${file.name}` },
+            { fontePadrao: `Arquivo: ${file.name}` }
+          )
       });
 
       setUltimosCnpjsFalhados(falhados);
@@ -865,7 +877,11 @@ export default function VendedorTRR_Master() {
       pausaMs: 300,
       mensagemProgresso: (processados, total) => `Processando ${processados} de ${total}...`,
       processador: async (cnpj) =>
-        processarCNPJ(cnpj, { fonte_lead: 'Busca Manual' }, { fontePadrao: 'Busca Manual' })
+        processarCNPJ(
+          cnpj,
+          { fonte_lead: 'Busca Manual' },
+          { fontePadrao: 'Busca Manual' }
+        )
     });
 
     setUltimosCnpjsFalhados(falhados);
