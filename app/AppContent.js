@@ -5,10 +5,12 @@ import { consultarCNPJNaBrasilAPI } from '../lib/brasilApi';
 import * as XLSX from 'xlsx';
 import LeadVisualModal from '../components/LeadVisualModal';
 import TriagemLeadRow from '../components/TriagemLeadRow';
+import IncrementarLeadModal from '../components/IncrementarLeadModal';
 
 const STATUS_LEAD = {
   NOVO: 'Novo',
   TRIAGEM: 'Triagem',
+  MESA_DE_TRABALHO: 'Mesa de Trabalho',
   EM_PROSPECCAO: 'Em Prospecção'
 };
 
@@ -19,7 +21,8 @@ const MODULOS = {
 
 const ABAS = {
   ESTOQUE: 'estoque',
-  TRIAGEM: 'triagem'
+  TRIAGEM: 'triagem',
+  MESA: 'mesa'
 };
 
 const FILTROS_INICIAIS = {
@@ -240,6 +243,84 @@ const montarPayloadReceita = (leadExistente = {}, info = {}, fontePadrao = 'Busc
   };
 };
 
+const montarHtmlCadastroLead = (lead) => {
+  const telefone = lead.telefone_1 || lead.telefone_2 || '';
+  const linhas = [
+    ['Razão social', lead.razao_social || ''],
+    ['CNPJ', formatarCNPJ(lead.cnpj || '')],
+    ['IE', lead.inscricao_estadual || ''],
+    ['IM', lead.inscricao_municipal || ''],
+    ['Contato', lead.contato_nome || ''],
+    ['Telefone', telefone],
+    ['Email', lead.email || ''],
+    ['Endereço de obra', lead.endereco_obra || '']
+  ];
+
+  return `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8" />
+      <title>Cadastro - ${lead.razao_social || 'Lead'}</title>
+      <style>
+        body {
+          font-family: Arial, Helvetica, sans-serif;
+          padding: 32px;
+          color: #111827;
+        }
+        h1 {
+          font-size: 22px;
+          margin: 0 0 8px;
+        }
+        p.sub {
+          color: #4b5563;
+          margin: 0 0 24px;
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          font-weight: bold;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 12px;
+        }
+        th, td {
+          border: 1px solid #d1d5db;
+          padding: 12px;
+          text-align: left;
+          vertical-align: top;
+          font-size: 13px;
+        }
+        th {
+          width: 220px;
+          background: #f3f4f6;
+          font-weight: 700;
+        }
+      </style>
+    </head>
+    <body>
+      <h1>Ficha de Cadastro</h1>
+      <p class="sub">Vendedor TRR</p>
+      <table>
+        <tbody>
+          ${linhas
+            .map(
+              ([label, value]) => `
+                <tr>
+                  <th>${label}</th>
+                  <td>${String(value || '').replace(/\n/g, '<br />') || 'Não informado'}</td>
+                </tr>
+              `
+            )
+            .join('')}
+        </tbody>
+      </table>
+    </body>
+    </html>
+  `;
+};
+
 export default function VendedorTRR_Master() {
   const [leads, setLeads] = useState([]);
   const [aba, setAba] = useState(ABAS.ESTOQUE);
@@ -262,6 +343,9 @@ export default function VendedorTRR_Master() {
   const [buscaDebounced, setBuscaDebounced] = useState('');
   const [leadVisualSelecionado, setLeadVisualSelecionado] = useState(null);
   const [visualModalAberto, setVisualModalAberto] = useState(false);
+  const [leadIncrementoSelecionado, setLeadIncrementoSelecionado] = useState(null);
+  const [incrementarModalAberto, setIncrementarModalAberto] = useState(false);
+  const [salvandoIncremento, setSalvandoIncremento] = useState(false);
 
   const limparMensagens = useCallback(() => {
     setResultadoBusca('');
@@ -295,6 +379,16 @@ export default function VendedorTRR_Master() {
     setLeadVisualSelecionado(null);
   }, []);
 
+  const abrirIncrementarLead = useCallback((lead) => {
+    setLeadIncrementoSelecionado(lead);
+    setIncrementarModalAberto(true);
+  }, []);
+
+  const fecharIncrementarLead = useCallback(() => {
+    setIncrementarModalAberto(false);
+    setLeadIncrementoSelecionado(null);
+  }, []);
+
   const prepararDadosPlanilha = useCallback((dados) => {
     return dados.map((lead) => ({
       'Razão Social': lead.razao_social || '',
@@ -310,19 +404,17 @@ export default function VendedorTRR_Master() {
       'Telefone 1': lead.telefone_1 || '',
       'Telefone 2': lead.telefone_2 || '',
       'Email': lead.email || '',
+      'IE': lead.inscricao_estadual || '',
+      'IM': lead.inscricao_municipal || '',
+      'Contato': lead.contato_nome || '',
+      'Endereço de obra': lead.endereco_obra || '',
+      'Observações': lead.observacoes || '',
       'Fonte do Lead': lead.fonte_lead || '',
       'CNAE Principal': lead.cnae_principal_descricao || '',
       'CNAE Secundário': lead.cnae_secundario || '',
       'Situação Cadastral': lead.situacao_cadastral || '',
       'Status do Lead': lead.status_lead || '',
-      'Capital Social': lead.capital_social || '',
-      'Porte': lead.porte || '',
-      'Data de Abertura': lead.data_abertura || '',
-      'Data Início Atividade': lead.data_inicio_atividade || '',
-      'Observações': lead.observacoes || '',
-      'Ações de Prospecção': lead.acoes_prospeccao || '',
-      'Contato Nome': lead.contato_nome || '',
-      'Data Reagendada': lead.data_reagendada || ''
+      'Status do Vendedor': lead.status_vendedor || ''
     }));
   }, []);
 
@@ -418,7 +510,10 @@ export default function VendedorTRR_Master() {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Filtrados');
 
-      const nomeAba = aba === ABAS.ESTOQUE ? 'estoque' : 'triagem';
+      let nomeAba = 'estoque';
+      if (aba === ABAS.TRIAGEM) nomeAba = 'triagem';
+      if (aba === ABAS.MESA) nomeAba = 'mesa-de-trabalho';
+
       XLSX.writeFile(wb, `leads-filtrados-${nomeAba}.xlsx`);
 
       setResultadoBusca(`${leadsFiltrados.length} lead(s) filtrado(s) exportado(s) com sucesso.`);
@@ -530,18 +625,26 @@ export default function VendedorTRR_Master() {
 
       setTotalAbsoluto(totalBanco || 0);
 
+      let query = supabase
+        .from('empresas_mestre')
+        .select('*')
+        .order('razao_social', { ascending: true });
+
+      if (aba === ABAS.ESTOQUE) {
+        query = query.eq('status_lead', STATUS_LEAD.NOVO);
+      } else if (aba === ABAS.TRIAGEM) {
+        query = query.eq('status_lead', STATUS_LEAD.TRIAGEM);
+      } else if (aba === ABAS.MESA) {
+        query = query.eq('status_lead', STATUS_LEAD.MESA_DE_TRABALHO);
+      }
+
       let todosLeads = [];
       let de = 0;
       let ate = 999;
       let continua = true;
 
       while (continua) {
-        const { data, error } = await supabase
-          .from('empresas_mestre')
-          .select('*')
-          .eq('status_lead', aba === ABAS.ESTOQUE ? STATUS_LEAD.NOVO : STATUS_LEAD.TRIAGEM)
-          .order('razao_social', { ascending: true })
-          .range(de, ate);
+        const { data, error } = await query.range(de, ate);
 
         if (error) throw error;
 
@@ -645,62 +748,214 @@ export default function VendedorTRR_Master() {
     }
   }, [aba, limparMensagens, sincronizar]);
 
-  const salvarObservacoesLead = useCallback(async (lead) => {
+  const incrementarLead = useCallback(async (lead) => {
     try {
-      const textoAtual = lead?.observacoes || '';
-      const novoTexto = window.prompt('Digite as observações deste lead:', textoAtual);
+      limparMensagens();
+      setStatusProcesso(`Incrementando ${lead.razao_social}...`);
 
-      if (novoTexto === null) return;
+      const resultado = await processarCNPJ(lead.cnpj, lead, {
+        fontePadrao: lead.fonte_lead || 'Busca Manual'
+      });
 
-      const { error } = await supabase
-        .from('empresas_mestre')
-        .update({
-          observacoes: novoTexto,
-          ultima_interacao: new Date().toISOString()
-        })
-        .eq('cnpj', lead.cnpj);
-
-      if (error) throw error;
-
-      setResultadoBusca('Observações atualizadas com sucesso.');
-      await sincronizar();
-    } catch (error) {
-      console.error('Erro ao salvar observações:', error);
-      setErroBusca(`Erro ao salvar observações: ${error.message || 'falha ao atualizar.'}`);
-    }
-  }, [sincronizar]);
-
-  const reagendarLead = useCallback(async (lead) => {
-    try {
-      const dataAtual = lead?.data_reagendada || '';
-      const novaData = window.prompt('Digite a nova data no formato AAAA-MM-DD:', dataAtual);
-
-      if (novaData === null) return;
-
-      const valorFinal = String(novaData || '').trim();
-
-      if (valorFinal && !/^\d{4}-\d{2}-\d{2}$/.test(valorFinal)) {
-        setErroBusca('Data inválida. Use o formato AAAA-MM-DD.');
-        return;
+      if (!resultado.ok) {
+        throw new Error(resultado.erro || 'Falha ao incrementar lead.');
       }
 
+      setStatusProcesso('');
+      abrirIncrementarLead({
+        ...lead,
+        ...(resultado.payloadSalvo || {})
+      });
+    } catch (error) {
+      console.error('Erro ao incrementar lead:', error);
+      setStatusProcesso('');
+      setErroBusca(`Erro ao incrementar lead: ${error.message || 'falha ao atualizar.'}`);
+    }
+  }, [abrirIncrementarLead, limparMensagens, processarCNPJ]);
+
+  const salvarIncrementoLead = useCallback(async (dadosFormulario) => {
+    try {
+      if (!leadIncrementoSelecionado?.cnpj) return;
+
+      setSalvandoIncremento(true);
+      limparMensagens();
+
+      const payload = {
+        inscricao_estadual: valorTexto(dadosFormulario.inscricao_estadual),
+        inscricao_municipal: valorTexto(dadosFormulario.inscricao_municipal),
+        contato_nome: valorTexto(dadosFormulario.contato_nome),
+        telefone_1: valorTexto(dadosFormulario.telefone_1),
+        email: valorTexto(dadosFormulario.email),
+        endereco_obra: valorTexto(dadosFormulario.endereco_obra),
+        observacoes: valorTexto(dadosFormulario.observacoes),
+        ultima_interacao: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('empresas_mestre')
+        .update(payload)
+        .eq('cnpj', leadIncrementoSelecionado.cnpj);
+
+      if (error) throw error;
+
+      setResultadoBusca('Informações incrementadas com sucesso.');
+      fecharIncrementarLead();
+      await sincronizar();
+    } catch (error) {
+      console.error('Erro ao salvar incremento:', error);
+      setErroBusca(`Erro ao salvar incremento: ${error.message || 'falha ao atualizar.'}`);
+    } finally {
+      setSalvandoIncremento(false);
+    }
+  }, [fecharIncrementarLead, leadIncrementoSelecionado, limparMensagens, sincronizar]);
+
+  const gerarPdfCadastroLead = useCallback(async (lead) => {
+    try {
+      limparMensagens();
+
+      const nomeArquivo = `cadastro-${normalizarCNPJ(lead.cnpj || 'lead')}.pdf`;
+
+      try {
+        const mod = await import('jspdf');
+        const jsPDF = mod.jsPDF || mod.default?.jsPDF || mod.default;
+
+        if (jsPDF) {
+          const doc = new jsPDF({
+            unit: 'mm',
+            format: 'a4'
+          });
+
+          const telefone = lead.telefone_1 || lead.telefone_2 || '';
+          const linhas = [
+            ['Razão social', lead.razao_social || 'Não informado'],
+            ['CNPJ', formatarCNPJ(lead.cnpj || '') || 'Não informado'],
+            ['IE', lead.inscricao_estadual || 'Não informado'],
+            ['IM', lead.inscricao_municipal || 'Não informado'],
+            ['Contato', lead.contato_nome || 'Não informado'],
+            ['Telefone', telefone || 'Não informado'],
+            ['Email', lead.email || 'Não informado'],
+            ['Endereço de obra', lead.endereco_obra || 'Não informado']
+          ];
+
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(18);
+          doc.text('Ficha de Cadastro', 20, 20);
+
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(10);
+          doc.text('Vendedor TRR', 20, 27);
+
+          let y = 38;
+
+          linhas.forEach(([label, valor]) => {
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.text(`${label}:`, 20, y);
+
+            doc.setFont('helvetica', 'normal');
+            const valorQuebrado = doc.splitTextToSize(String(valor), 120);
+            doc.text(valorQuebrado, 60, y);
+
+            y += Math.max(10, valorQuebrado.length * 6 + 2);
+          });
+
+          doc.save(nomeArquivo);
+          setResultadoBusca('PDF gerado com sucesso.');
+          return;
+        }
+      } catch (erroJspdf) {
+        console.warn('jsPDF não disponível. Usando impressão do navegador.', erroJspdf);
+      }
+
+      const popup = window.open('', '_blank', 'width=900,height=700');
+      if (!popup) {
+        throw new Error('O navegador bloqueou a abertura da janela do PDF.');
+      }
+
+      popup.document.open();
+      popup.document.write(montarHtmlCadastroLead(lead));
+      popup.document.close();
+      popup.focus();
+
+      setTimeout(() => {
+        popup.print();
+      }, 500);
+
+      setResultadoBusca('Ficha aberta para salvar como PDF.');
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      setErroBusca(`Erro ao gerar PDF: ${error.message || 'falha na geração.'}`);
+    }
+  }, [limparMensagens]);
+
+  const enviarParaMesaDeTrabalho = useCallback(async (lead) => {
+    try {
+      limparMensagens();
+
       const { error } = await supabase
         .from('empresas_mestre')
         .update({
-          data_reagendada: valorFinal || null,
+          status_lead: STATUS_LEAD.MESA_DE_TRABALHO,
+          status_vendedor: 'Mesa de Trabalho',
           ultima_interacao: new Date().toISOString()
         })
         .eq('cnpj', lead.cnpj);
 
       if (error) throw error;
 
-      setResultadoBusca(valorFinal ? 'Lead reagendado com sucesso.' : 'Reagendamento removido com sucesso.');
+      setResultadoBusca('Lead enviado para Mesa de Trabalho com sucesso.');
       await sincronizar();
     } catch (error) {
-      console.error('Erro ao reagendar lead:', error);
-      setErroBusca(`Erro ao reagendar lead: ${error.message || 'falha ao atualizar.'}`);
+      console.error('Erro ao enviar para mesa de trabalho:', error);
+      setErroBusca(`Erro ao enviar para Mesa de Trabalho: ${error.message || 'falha ao atualizar.'}`);
     }
-  }, [sincronizar]);
+  }, [limparMensagens, sincronizar]);
+
+  const enviarParaEstoque = useCallback(async (lead) => {
+    try {
+      limparMensagens();
+
+      const { error } = await supabase
+        .from('empresas_mestre')
+        .update({
+          status_lead: STATUS_LEAD.NOVO
+        })
+        .eq('cnpj', lead.cnpj);
+
+      if (error) throw error;
+
+      setResultadoBusca('Lead devolvido para Estoque com sucesso.');
+      await sincronizar();
+    } catch (error) {
+      console.error('Erro ao enviar para estoque:', error);
+      setErroBusca(`Erro ao devolver lead para estoque: ${error.message || 'falha ao atualizar.'}`);
+    }
+  }, [limparMensagens, sincronizar]);
+
+  const deletarLead = useCallback(async (lead) => {
+    try {
+      const confirmar = window.confirm(
+        `Deletar o lead "${lead.razao_social}"?\n\nEssa ação não pode ser desfeita.`
+      );
+
+      if (!confirmar) return;
+
+      limparMensagens();
+
+      const { error } = await supabase
+        .from('empresas_mestre')
+        .delete()
+        .eq('cnpj', lead.cnpj);
+
+      if (error) throw error;
+
+      setResultadoBusca('Lead deletado com sucesso.');
+      await sincronizar();
+    } catch (error) {
+      console.error('Erro ao deletar lead:', error);
+      setErroBusca(`Erro ao deletar lead: ${error.message || 'falha ao excluir.'}`);
+    }
+  }, [limparMensagens, sincronizar]);
 
   const limparInativos = useCallback(async () => {
     if (!confirm(`Limpar inativos e duplicados? Isso vai verificar ${leadsFiltrados.length} lead(s) da tela e depois limpar duplicidades no banco.`)) {
@@ -976,12 +1231,6 @@ export default function VendedorTRR_Master() {
             <span className="text-[8px] bg-orange-900/20 px-2 py-0.5 rounded text-orange-400 font-bold border border-orange-500/10 truncate max-w-[200px]">
               {lead.cnae_principal_descricao || 'SEM CNAE'}
             </span>
-
-            {lead.cnae_secundario && (
-              <span className="text-[8px] bg-zinc-900/50 px-2 py-0.5 rounded text-zinc-300 font-medium truncate max-w-[200px] italic">
-                Sec: {lead.cnae_secundario}
-              </span>
-            )}
           </div>
         </div>
 
@@ -1002,13 +1251,88 @@ export default function VendedorTRR_Master() {
         key={lead.cnpj}
         lead={lead}
         onVisualizar={() => abrirVisualizacaoLead(lead)}
-        onObservacoes={() => salvarObservacoesLead(lead)}
-        onReagendar={() => reagendarLead(lead)}
-        onAvancar={() => moverLead(lead)}
+        onIncrementar={() => incrementarLead(lead)}
+        onCadastrar={() => gerarPdfCadastroLead(lead)}
+        onMesaDeTrabalho={() => enviarParaMesaDeTrabalho(lead)}
+        onEstoque={() => enviarParaEstoque(lead)}
+        onDeletar={() => deletarLead(lead)}
         formatarCNPJ={formatarCNPJ}
       />
     );
-  }, [abrirVisualizacaoLead, moverLead, reagendarLead, salvarObservacoesLead]);
+  }, [
+    abrirVisualizacaoLead,
+    incrementarLead,
+    gerarPdfCadastroLead,
+    enviarParaMesaDeTrabalho,
+    enviarParaEstoque,
+    deletarLead
+  ]);
+
+  const renderLinhaMesa = useCallback((lead) => {
+    return (
+      <div
+        key={lead.cnpj}
+        className="py-4 px-4 flex flex-col xl:flex-row xl:items-center gap-4 hover:bg-zinc-800/40 transition-colors"
+      >
+        <div className="flex-1 min-w-0">
+          <h3 className="text-[12px] font-bold uppercase text-white leading-tight break-words">
+            {lead.razao_social}
+          </h3>
+
+          <div className="flex gap-2 mt-2 flex-wrap">
+            <span className="text-[8px] bg-blue-900/20 px-2 py-0.5 rounded text-blue-400 font-bold border border-blue-500/10 uppercase">
+              {formatarCNPJ(lead.cnpj)}
+            </span>
+
+            <span className="text-[8px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-300 font-bold border border-white/5 uppercase">
+              {lead.bairro || 'SEM BAIRRO'}
+            </span>
+
+            <span className="text-[8px] bg-violet-900/20 px-2 py-0.5 rounded text-violet-300 font-bold border border-violet-500/10">
+              {lead.status_vendedor || 'Mesa de Trabalho'}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <button
+            onClick={() => abrirVisualizacaoLead(lead)}
+            className="h-10 px-3 rounded-xl bg-zinc-800 text-white text-[10px] font-black uppercase border border-white/10 hover:bg-zinc-700 active:scale-95 transition-all"
+          >
+            Visualizar
+          </button>
+
+          <button
+            onClick={() => gerarPdfCadastroLead(lead)}
+            className="h-10 px-3 rounded-xl bg-emerald-700 text-white text-[10px] font-black uppercase hover:bg-emerald-600 active:scale-95 transition-all"
+          >
+            Cadastrar
+          </button>
+
+          <button
+            onClick={() => enviarParaEstoque(lead)}
+            className="h-10 px-3 rounded-xl bg-yellow-600 text-black text-[10px] font-black uppercase hover:bg-yellow-500 active:scale-95 transition-all"
+          >
+            Estoque
+          </button>
+
+          <button
+            onClick={() => deletarLead(lead)}
+            className="h-10 px-3 rounded-xl bg-red-700 text-white text-[10px] font-black uppercase hover:bg-red-600 active:scale-95 transition-all"
+          >
+            Deletar
+          </button>
+        </div>
+      </div>
+    );
+  }, [abrirVisualizacaoLead, deletarLead, enviarParaEstoque, gerarPdfCadastroLead]);
+
+  const tituloPrincipal = useMemo(() => {
+    if (moduloAtivo === MODULOS.PESCARIA) return 'Pescaria de CNPJ';
+    if (aba === ABAS.TRIAGEM) return 'Triagem';
+    if (aba === ABAS.MESA) return 'Mesa de Trabalho';
+    return 'Estoque';
+  }, [aba, moduloAtivo]);
 
   return (
     <div className="min-h-screen bg-black text-white pb-40 font-sans antialiased">
@@ -1033,9 +1357,7 @@ export default function VendedorTRR_Master() {
 
         <div className="flex justify-between items-center gap-3">
           <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">
-            {moduloAtivo === MODULOS.TODO
-              ? (aba === ABAS.TRIAGEM ? 'Triagem' : 'Estoque')
-              : 'Pescaria de CNPJ'}
+            {tituloPrincipal}
           </h2>
 
           <div className="flex gap-2 flex-wrap justify-end">
@@ -1226,6 +1548,10 @@ export default function VendedorTRR_Master() {
                 <div className="divide-y divide-zinc-800/50">
                   {leadsPaginados.map((lead) => renderLinhaTriagem(lead))}
                 </div>
+              ) : aba === ABAS.MESA ? (
+                <div className="divide-y divide-zinc-800/50">
+                  {leadsPaginados.map((lead) => renderLinhaMesa(lead))}
+                </div>
               ) : (
                 <div className="divide-y divide-zinc-800/50">
                   {leadsPaginados.map((lead) => renderLinhaEstoque(lead))}
@@ -1376,16 +1702,26 @@ export default function VendedorTRR_Master() {
         />
       )}
 
-      <nav className="fixed bottom-6 left-6 right-6 h-16 bg-zinc-900/90 backdrop-blur-md border border-white/10 rounded-full px-8 flex justify-around items-center z-50 shadow-2xl">
-        {[ABAS.ESTOQUE, ABAS.TRIAGEM].map((a) => (
+      {incrementarModalAberto && (
+        <IncrementarLeadModal
+          lead={leadIncrementoSelecionado}
+          isOpen={incrementarModalAberto}
+          onClose={fecharIncrementarLead}
+          onSave={salvarIncrementoLead}
+          salvando={salvandoIncremento}
+        />
+      )}
+
+      <nav className="fixed bottom-6 left-6 right-6 h-16 bg-zinc-900/90 backdrop-blur-md border border-white/10 rounded-full px-4 md:px-8 flex justify-around items-center z-50 shadow-2xl">
+        {[ABAS.ESTOQUE, ABAS.TRIAGEM, ABAS.MESA].map((a) => (
           <button
             key={a}
             onClick={() => setAba(a)}
-            className={`text-[11px] font-black uppercase tracking-widest ${
+            className={`text-[10px] md:text-[11px] font-black uppercase tracking-widest ${
               aba === a ? 'text-blue-500' : 'text-zinc-600'
             }`}
           >
-            {a}
+            {a === ABAS.ESTOQUE ? 'Estoque' : a === ABAS.TRIAGEM ? 'Triagem' : 'Mesa'}
           </button>
         ))}
       </nav>
