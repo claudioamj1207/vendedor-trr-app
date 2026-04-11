@@ -4,9 +4,11 @@ import React from 'react';
 export default function TriagemLeadRow({
   lead,
   onVisualizar,
-  onObservacoes,
-  onReagendar,
-  onAvancar,
+  onIncrementar,
+  onCadastrar,
+  onMesaDeTrabalho,
+  onEstoque,
+  onDeletar,
   formatarCNPJ
 }) {
   const cnpjFormatado = formatarCNPJ
@@ -15,8 +17,8 @@ export default function TriagemLeadRow({
 
   return (
     <div className="px-4 py-4 hover:bg-zinc-800/40 transition-colors">
-      <div className="flex flex-col xl:flex-row xl:items-center gap-4">
-        <div className="flex-1 min-w-0">
+      <div className="flex flex-col gap-4">
+        <div className="min-w-0">
           <div className="flex flex-col gap-2">
             <h3 className="text-[12px] md:text-[13px] font-bold uppercase text-white leading-tight break-words">
               {lead?.razao_social || 'SEM RAZÃO SOCIAL'}
@@ -39,11 +41,9 @@ export default function TriagemLeadRow({
                 {lead?.cnae_principal_descricao || 'SEM CNAE'}
               </span>
 
-              {lead?.data_reagendada && (
-                <span className="text-[9px] bg-yellow-900/20 px-2.5 py-1 rounded-lg text-yellow-300 font-bold border border-yellow-500/10">
-                  Reagendado: {lead.data_reagendada}
-                </span>
-              )}
+              <span className="text-[9px] bg-violet-900/20 px-2.5 py-1 rounded-lg text-violet-300 font-bold border border-violet-500/10">
+                {lead?.status_vendedor || 'Sem status vendedor'}
+              </span>
             </div>
 
             {lead?.nome_fantasia && lead.nome_fantasia !== lead.razao_social && (
@@ -57,50 +57,56 @@ export default function TriagemLeadRow({
                 Contato: {lead.contato_nome}
               </p>
             )}
-
-            {lead?.observacoes && (
-              <p className="text-[10px] text-zinc-500 break-words line-clamp-2">
-                Obs: {lead.observacoes}
-              </p>
-            )}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 shrink-0">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
           <button
             type="button"
             onClick={onVisualizar}
-            className="min-w-[108px] h-10 px-4 rounded-xl bg-zinc-800 text-white text-[10px] font-black uppercase tracking-wide border border-white/10 hover:bg-zinc-700 active:scale-95 transition-all"
-            title="Visualizar lead"
+            className="h-10 px-3 rounded-xl bg-zinc-800 text-white text-[10px] font-black uppercase tracking-wide border border-white/10 hover:bg-zinc-700 active:scale-95 transition-all"
           >
             Visualizar
           </button>
 
           <button
             type="button"
-            onClick={onObservacoes}
-            className="min-w-[108px] h-10 px-4 rounded-xl bg-violet-700 text-white text-[10px] font-black uppercase tracking-wide hover:bg-violet-600 active:scale-95 transition-all"
-            title="Editar observações"
+            onClick={onIncrementar}
+            className="h-10 px-3 rounded-xl bg-blue-700 text-white text-[10px] font-black uppercase tracking-wide hover:bg-blue-600 active:scale-95 transition-all"
           >
-            Observações
+            Incrementar
           </button>
 
           <button
             type="button"
-            onClick={onReagendar}
-            className="min-w-[108px] h-10 px-4 rounded-xl bg-yellow-600 text-black text-[10px] font-black uppercase tracking-wide hover:bg-yellow-500 active:scale-95 transition-all"
-            title="Reagendar lead"
+            onClick={onCadastrar}
+            className="h-10 px-3 rounded-xl bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wide hover:bg-emerald-600 active:scale-95 transition-all"
           >
-            Reagendar
+            Cadastrar
           </button>
 
           <button
             type="button"
-            onClick={onAvancar}
-            className="min-w-[108px] h-10 px-4 rounded-xl bg-blue-600 text-white text-[10px] font-black uppercase tracking-wide hover:bg-blue-500 active:scale-95 transition-all"
-            title="Enviar para prospecção"
+            onClick={onMesaDeTrabalho}
+            className="h-10 px-3 rounded-xl bg-violet-700 text-white text-[10px] font-black uppercase tracking-wide hover:bg-violet-600 active:scale-95 transition-all"
           >
-            Avançar
+            Mesa de Trabalho
+          </button>
+
+          <button
+            type="button"
+            onClick={onEstoque}
+            className="h-10 px-3 rounded-xl bg-yellow-600 text-black text-[10px] font-black uppercase tracking-wide hover:bg-yellow-500 active:scale-95 transition-all"
+          >
+            Estoque
+          </button>
+
+          <button
+            type="button"
+            onClick={onDeletar}
+            className="h-10 px-3 rounded-xl bg-red-700 text-white text-[10px] font-black uppercase tracking-wide hover:bg-red-600 active:scale-95 transition-all"
+          >
+            Deletar
           </button>
         </div>
       </div>
