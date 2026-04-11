@@ -1,11 +1,53 @@
 "use client";
 import React from 'react';
 
+function montarEnderecoConsulta(lead) {
+  const partes = [
+    lead?.logradouro,
+    lead?.numero,
+    lead?.bairro,
+    lead?.municipio,
+    lead?.uf,
+    lead?.cep
+  ].filter(Boolean);
+
+  return partes.join(', ');
+}
+
+async function copiarTexto(texto) {
+  if (!texto) return;
+
+  try {
+    await navigator.clipboard.writeText(texto);
+  } catch (error) {
+    const input = document.createElement('textarea');
+    input.value = texto;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+  }
+}
+
+function abrirRota(lead) {
+  const endereco = montarEnderecoConsulta(lead);
+
+  if (!endereco) {
+    window.alert('Este lead não tem endereço suficiente para abrir rota.');
+    return;
+  }
+
+  const destino = encodeURIComponent(endereco);
+  const wazeUrl = `https://www.waze.com/ul?q=${destino}&navigate=yes`;
+  window.open(wazeUrl, '_blank', 'noopener,noreferrer');
+}
+
 export default function LeadActionRow({
   lead,
   formatarCNPJ,
   actions = []
 }) {
+  const cnpjLimpo = String(lead?.cnpj || '').replace(/\D/g, '');
   const cnpjFormatado = formatarCNPJ
     ? formatarCNPJ(lead?.cnpj || '')
     : (lead?.cnpj || 'SEM CNPJ');
@@ -22,6 +64,24 @@ export default function LeadActionRow({
             <span className="text-[10px] text-blue-400 font-bold">
               {cnpjFormatado}
             </span>
+
+            <button
+              type="button"
+              onClick={() => copiarTexto(cnpjLimpo)}
+              title="Copiar CNPJ"
+              className="px-2 py-0.5 text-[9px] rounded-md bg-blue-900/20 text-blue-300 font-black border border-blue-500/10 hover:bg-blue-800/30"
+            >
+              COPIAR
+            </button>
+
+            <button
+              type="button"
+              onClick={() => abrirRota(lead)}
+              title="Abrir rota"
+              className="px-2 py-0.5 text-[9px] rounded-md bg-emerald-900/20 text-emerald-300 font-black border border-emerald-500/10 hover:bg-emerald-800/30"
+            >
+              ROTA
+            </button>
 
             <span className="text-[10px] text-zinc-400 uppercase">
               {lead?.bairro || 'SEM BAIRRO'}
