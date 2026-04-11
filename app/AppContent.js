@@ -51,7 +51,6 @@ const CAMPOS_COM_BUSCA_EXATA = [
 ];
 
 const ITENS_POR_PAGINA = 50;
-const CNPJ_DEBUG = '04832204000140';
 
 const normalizarCNPJ = (cnpj) => String(cnpj || '').replace(/\D/g, '');
 
@@ -263,7 +262,6 @@ export default function VendedorTRR_Master() {
   const [buscaDebounced, setBuscaDebounced] = useState('');
   const [leadVisualSelecionado, setLeadVisualSelecionado] = useState(null);
   const [visualModalAberto, setVisualModalAberto] = useState(false);
-  const [debugReceita, setDebugReceita] = useState(null);
 
   const limparMensagens = useCallback(() => {
     setResultadoBusca('');
@@ -297,51 +295,6 @@ export default function VendedorTRR_Master() {
     setLeadVisualSelecionado(null);
   }, []);
 
-  const testarCNPJDebug = useCallback(async () => {
-    try {
-      limparMensagens();
-      setDebugReceita({
-        carregando: true,
-        cnpj: CNPJ_DEBUG
-      });
-
-      const res = await consultarCNPJNaBrasilAPI(CNPJ_DEBUG);
-
-      if (!res.ok) {
-        setDebugReceita({
-          carregando: false,
-          erro: res.erro,
-          cnpj: CNPJ_DEBUG
-        });
-        return;
-      }
-
-      const info = res.dados || {};
-
-      setDebugReceita({
-        carregando: false,
-        cnpj: CNPJ_DEBUG,
-        logradouro: info.logradouro || '',
-        numero: info.numero || '',
-        bairro: info.bairro || '',
-        municipio: info.municipio || '',
-        uf: info.uf || '',
-        cep: info.cep || '',
-        complemento: info.complemento || '',
-        telefone_1: info.telefone_1 || '',
-        telefone_2: info.telefone_2 || '',
-        email: info.email || '',
-        bruto: info
-      });
-    } catch (error) {
-      setDebugReceita({
-        carregando: false,
-        cnpj: CNPJ_DEBUG,
-        erro: error.message || 'Falha no teste do CNPJ'
-      });
-    }
-  }, [limparMensagens]);
-
   const prepararDadosPlanilha = useCallback((dados) => {
     return dados.map((lead) => ({
       'Razão Social': lead.razao_social || '',
@@ -365,7 +318,11 @@ export default function VendedorTRR_Master() {
       'Capital Social': lead.capital_social || '',
       'Porte': lead.porte || '',
       'Data de Abertura': lead.data_abertura || '',
-      'Data Início Atividade': lead.data_inicio_atividade || ''
+      'Data Início Atividade': lead.data_inicio_atividade || '',
+      'Observações': lead.observacoes || '',
+      'Ações de Prospecção': lead.acoes_prospeccao || '',
+      'Contato Nome': lead.contato_nome || '',
+      'Data Reagendada': lead.data_reagendada || ''
     }));
   }, []);
 
@@ -688,6 +645,63 @@ export default function VendedorTRR_Master() {
     }
   }, [aba, limparMensagens, sincronizar]);
 
+  const salvarObservacoesLead = useCallback(async (lead) => {
+    try {
+      const textoAtual = lead?.observacoes || '';
+      const novoTexto = window.prompt('Digite as observações deste lead:', textoAtual);
+
+      if (novoTexto === null) return;
+
+      const { error } = await supabase
+        .from('empresas_mestre')
+        .update({
+          observacoes: novoTexto,
+          ultima_interacao: new Date().toISOString()
+        })
+        .eq('cnpj', lead.cnpj);
+
+      if (error) throw error;
+
+      setResultadoBusca('Observações atualizadas com sucesso.');
+      await sincronizar();
+    } catch (error) {
+      console.error('Erro ao salvar observações:', error);
+      setErroBusca(`Erro ao salvar observações: ${error.message || 'falha ao atualizar.'}`);
+    }
+  }, [sincronizar]);
+
+  const reagendarLead = useCallback(async (lead) => {
+    try {
+      const dataAtual = lead?.data_reagendada || '';
+      const novaData = window.prompt('Digite a nova data no formato AAAA-MM-DD:', dataAtual);
+
+      if (novaData === null) return;
+
+      const valorFinal = String(novaData || '').trim();
+
+      if (valorFinal && !/^\d{4}-\d{2}-\d{2}$/.test(valorFinal)) {
+        setErroBusca('Data inválida. Use o formato AAAA-MM-DD.');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('empresas_mestre')
+        .update({
+          data_reagendada: valorFinal || null,
+          ultima_interacao: new Date().toISOString()
+        })
+        .eq('cnpj', lead.cnpj);
+
+      if (error) throw error;
+
+      setResultadoBusca(valorFinal ? 'Lead reagendado com sucesso.' : 'Reagendamento removido com sucesso.');
+      await sincronizar();
+    } catch (error) {
+      console.error('Erro ao reagendar lead:', error);
+      setErroBusca(`Erro ao reagendar lead: ${error.message || 'falha ao atualizar.'}`);
+    }
+  }, [sincronizar]);
+
   const limparInativos = useCallback(async () => {
     if (!confirm(`Limpar inativos e duplicados? Isso vai verificar ${leadsFiltrados.length} lead(s) da tela e depois limpar duplicidades no banco.`)) {
       return;
@@ -988,15 +1002,13 @@ export default function VendedorTRR_Master() {
         key={lead.cnpj}
         lead={lead}
         onVisualizar={() => abrirVisualizacaoLead(lead)}
-        onMover={() => moverLead(lead)}
+        onObservacoes={() => salvarObservacoesLead(lead)}
+        onReagendar={() => reagendarLead(lead)}
         onAvancar={() => moverLead(lead)}
-        onEnviar={() => moverLead(lead)}
-        onProspeccao={() => moverLead(lead)}
         formatarCNPJ={formatarCNPJ}
-        abrirVisualizacaoLead={() => abrirVisualizacaoLead(lead)}
       />
     );
-  }, [abrirVisualizacaoLead, moverLead]);
+  }, [abrirVisualizacaoLead, moverLead, reagendarLead, salvarObservacoesLead]);
 
   return (
     <div className="min-h-screen bg-black text-white pb-40 font-sans antialiased">
@@ -1041,13 +1053,6 @@ export default function VendedorTRR_Master() {
                   className="text-[9px] bg-emerald-600 px-4 py-2 rounded-full font-bold"
                 >
                   🔄 ENRIQUECER
-                </button>
-
-                <button
-                  onClick={testarCNPJDebug}
-                  className="text-[9px] bg-yellow-600 px-4 py-2 rounded-full font-bold text-black"
-                >
-                  🧪 TESTAR CNPJ
                 </button>
 
                 <button
@@ -1203,84 +1208,6 @@ export default function VendedorTRR_Master() {
             >
               OK
             </button>
-          </div>
-        )}
-
-        {debugReceita && (
-          <div className="bg-yellow-900/20 border border-yellow-500/40 p-4 rounded-2xl mb-6 text-yellow-200">
-            <div className="flex justify-between items-start gap-3 mb-3">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-yellow-300">
-                  Debug do CNPJ
-                </p>
-                <p className="text-sm font-bold">{formatarCNPJ(debugReceita.cnpj || CNPJ_DEBUG)}</p>
-              </div>
-
-              <button
-                onClick={() => setDebugReceita(null)}
-                className="bg-yellow-500/20 px-3 py-1 rounded-full text-[10px] font-bold"
-              >
-                FECHAR
-              </button>
-            </div>
-
-            {debugReceita.carregando ? (
-              <p className="text-sm">Consultando Receita...</p>
-            ) : debugReceita.erro ? (
-              <p className="text-sm">Erro: {debugReceita.erro}</p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <div className="bg-black/20 rounded-xl p-3">
-                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">Logradouro</p>
-                  <p>{debugReceita.logradouro || 'NÃO VEIO'}</p>
-                </div>
-
-                <div className="bg-black/20 rounded-xl p-3">
-                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">Número</p>
-                  <p>{debugReceita.numero || 'NÃO VEIO'}</p>
-                </div>
-
-                <div className="bg-black/20 rounded-xl p-3">
-                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">Bairro</p>
-                  <p>{debugReceita.bairro || 'NÃO VEIO'}</p>
-                </div>
-
-                <div className="bg-black/20 rounded-xl p-3">
-                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">Município</p>
-                  <p>{debugReceita.municipio || 'NÃO VEIO'}</p>
-                </div>
-
-                <div className="bg-black/20 rounded-xl p-3">
-                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">UF</p>
-                  <p>{debugReceita.uf || 'NÃO VEIO'}</p>
-                </div>
-
-                <div className="bg-black/20 rounded-xl p-3">
-                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">CEP</p>
-                  <p>{debugReceita.cep || 'NÃO VEIO'}</p>
-                </div>
-
-                <div className="bg-black/20 rounded-xl p-3">
-                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">Complemento</p>
-                  <p>{debugReceita.complemento || 'NÃO VEIO'}</p>
-                </div>
-
-                <div className="bg-black/20 rounded-xl p-3">
-                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">Telefone 1</p>
-                  <p>{debugReceita.telefone_1 || 'NÃO VEIO'}</p>
-                </div>
-
-                <div className="bg-black/20 rounded-xl p-3">
-                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">Telefone 2</p>
-                  <p>{debugReceita.telefone_2 || 'NÃO VEIO'}</p>
-                </div>
-
-                <div className="bg-black/20 rounded-xl p-3 md:col-span-2">
-                  <p className="text-[10px] uppercase text-yellow-400 font-black mb-1">Email</p>
-                  <p>{debugReceita.email || 'NÃO VEIO'}</p>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
