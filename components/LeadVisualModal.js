@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 
 function formatarCNPJ(cnpj) {
   const limpo = String(cnpj || '').replace(/\D/g, '');
@@ -112,6 +112,68 @@ export default function LeadVisualModal({
     };
   }, [modalAberto, handleClose]);
 
+  const camposPrincipais = useMemo(() => new Set([
+    'id',
+    'cnpj',
+    'razao_social',
+    'nome_fantasia',
+    'situacao_cadastral',
+    'data_abertura',
+    'cnae_principal_codigo',
+    'cnae_principal_descricao',
+    'capital_social',
+    'logradouro',
+    'numero',
+    'bairro',
+    'municipio',
+    'uf',
+    'cep',
+    'telefone_1',
+    'telefone_2',
+    'email',
+    'categoria_trr',
+    'potencial_consumo',
+    'status_vendedor',
+    'ultima_interacao',
+    'observacoes_venda',
+    'criado_em',
+    'lat',
+    'lng',
+    'data_inicio_atividade',
+    'descricao_cnae',
+    'complemento',
+    'porte',
+    'status_lead',
+    'observacoes',
+    'acoes_prospeccao',
+    'resultado_campo',
+    'notas_campo',
+    'contato_nome',
+    'inscricao_estadual',
+    'inscricao_municipal',
+    'endereco_obra',
+    'classificacao_fornecedor',
+    'historico_visitas',
+    'registro_visita',
+    'data_reagendada',
+    'fonte_lead',
+    'data_captacao',
+    'cnae_secundario'
+  ]), []);
+
+  const camposExtras = useMemo(() => {
+    if (!lead) return [];
+
+    return Object.entries(lead)
+      .filter(([chave, valor]) => {
+        if (camposPrincipais.has(chave)) return false;
+        if (chave === '_busca' || chave === 'cnpj_normalizado') return false;
+        if (valor === null || valor === undefined || valor === '') return false;
+        return true;
+      })
+      .sort(([a], [b]) => a.localeCompare(b));
+  }, [camposPrincipais, lead]);
+
   if (!modalAberto || !lead) return null;
 
   return (
@@ -143,8 +205,8 @@ export default function LeadVisualModal({
                     {lead.status_lead || 'Sem status'}
                   </span>
 
-                  <span className="text-[10px] bg-emerald-900/20 px-3 py-1 rounded-full text-emerald-300 font-black border border-emerald-500/10 uppercase">
-                    {lead.situacao_cadastral || 'Sem situação'}
+                  <span className="text-[10px] bg-violet-900/20 px-3 py-1 rounded-full text-violet-300 font-black border border-violet-500/10 uppercase">
+                    {lead.status_vendedor || 'Sem status vendedor'}
                   </span>
                 </div>
               </div>
@@ -184,14 +246,14 @@ export default function LeadVisualModal({
               <LinhaInfo label="Município" value={lead.municipio} />
               <LinhaInfo label="UF" value={lead.uf} />
               <LinhaInfo label="CEP" value={lead.cep} />
-              <LinhaInfo label="Endereço da Obra" value={lead.endereco_obra} full />
+              <LinhaInfo label="Endereço de Obra" value={lead.endereco_obra} full />
             </Bloco>
 
-            <Bloco titulo="Contatos">
+            <Bloco titulo="Contatos e inscrições">
+              <LinhaInfo label="Contato" value={lead.contato_nome} />
               <LinhaInfo label="Telefone 1" value={lead.telefone_1} />
               <LinhaInfo label="Telefone 2" value={lead.telefone_2} />
               <LinhaInfo label="Email" value={lead.email} full />
-              <LinhaInfo label="Nome do Contato" value={lead.contato_nome} />
               <LinhaInfo label="Inscrição Estadual" value={lead.inscricao_estadual} />
               <LinhaInfo label="Inscrição Municipal" value={lead.inscricao_municipal} />
             </Bloco>
@@ -205,13 +267,12 @@ export default function LeadVisualModal({
               <LinhaInfo label="Potencial de Consumo" value={lead.potencial_consumo} />
             </Bloco>
 
-            <Bloco titulo="Triagem e prospecção">
+            <Bloco titulo="Triagem e campo">
               <LinhaInfo label="Observações" value={lead.observacoes} full />
               <LinhaInfo label="Ações de Prospecção" value={lead.acoes_prospeccao} full />
               <LinhaInfo label="Resultado de Campo" value={lead.resultado_campo} />
               <LinhaInfo label="Notas de Campo" value={lead.notas_campo} />
               <LinhaInfo label="Registro de Visita" value={lead.registro_visita} full />
-              <LinhaInfo label="Data Reagendada" value={formatarData(lead.data_reagendada)} />
               <LinhaInfo label="Observações de Venda" value={lead.observacoes_venda} full />
             </Bloco>
 
@@ -223,6 +284,19 @@ export default function LeadVisualModal({
               <LinhaInfo label="Longitude" value={lead.lng} />
               <LinhaInfo label="ID" value={lead.id} full />
             </Bloco>
+
+            {camposExtras.length > 0 && (
+              <Bloco titulo="Dados adicionais">
+                {camposExtras.map(([chave, valor]) => (
+                  <LinhaInfo
+                    key={chave}
+                    label={chave.replace(/_/g, ' ')}
+                    value={typeof valor === 'object' ? JSON.stringify(valor) : String(valor)}
+                    full
+                  />
+                ))}
+              </Bloco>
+            )}
 
             <div className="flex justify-end pt-2">
               <button
