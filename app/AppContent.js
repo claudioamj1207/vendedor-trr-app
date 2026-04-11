@@ -51,6 +51,7 @@ const CAMPOS_COM_BUSCA_EXATA = [
 ];
 
 const ITENS_POR_PAGINA = 50;
+const CNPJ_DEBUG = '04832204000140';
 
 const normalizarCNPJ = (cnpj) => String(cnpj || '').replace(/\D/g, '');
 
@@ -133,12 +134,7 @@ const valorTexto = (valor, fallback = '') => {
 };
 
 const limparObjetoParaBanco = (obj = {}) => {
-  const {
-    _busca,
-    cnpj_normalizado,
-    ...resto
-  } = obj || {};
-
+  const { _busca, cnpj_normalizado, ...resto } = obj || {};
   return resto;
 };
 
@@ -164,7 +160,6 @@ const converterDataBRparaISO = (valor) => {
 
 const converterNumero = (valor) => {
   if (valor === null || valor === undefined || valor === '') return null;
-
   if (typeof valor === 'number') return valor;
 
   const texto = String(valor)
@@ -190,7 +185,7 @@ const montarCNAESecundario = (cnaesSecundarios) => {
 const montarPayloadReceita = (leadExistente = {}, info = {}, fontePadrao = 'Busca Manual') => {
   const leadBase = limparObjetoParaBanco(leadExistente);
 
-  const payload = {
+  return {
     ...leadBase,
     cnpj: normalizarCNPJ(info.cnpj || leadBase.cnpj || ''),
     razao_social: valorTexto(info.razao_social, leadBase.razao_social || ''),
@@ -212,19 +207,10 @@ const montarPayloadReceita = (leadExistente = {}, info = {}, fontePadrao = 'Busc
     municipio: valorTexto(info.municipio, leadBase.municipio || ''),
     uf: valorTexto(info.uf, leadBase.uf || ''),
     cep: valorTexto(info.cep, leadBase.cep || ''),
-    telefone_1: valorTexto(
-      info.telefone_1,
-      leadBase.telefone_1 || ''
-    ),
-    telefone_2: valorTexto(
-      info.telefone_2,
-      leadBase.telefone_2 || ''
-    ),
+    telefone_1: valorTexto(info.telefone_1, leadBase.telefone_1 || ''),
+    telefone_2: valorTexto(info.telefone_2, leadBase.telefone_2 || ''),
     email: valorTexto(info.email, leadBase.email || ''),
-    data_inicio_atividade: valorTexto(
-      info.data_inicio_atividade,
-      leadBase.data_inicio_atividade || ''
-    ),
+    data_inicio_atividade: valorTexto(info.data_inicio_atividade, leadBase.data_inicio_atividade || ''),
     complemento: valorTexto(info.complemento, leadBase.complemento || ''),
     porte: valorTexto(info.porte, leadBase.porte || ''),
     status_lead: leadBase.status_lead || STATUS_LEAD.NOVO,
@@ -251,13 +237,8 @@ const montarPayloadReceita = (leadExistente = {}, info = {}, fontePadrao = 'Busc
     criado_em: leadBase.criado_em || undefined,
     lat: leadBase.lat ?? null,
     lng: leadBase.lng ?? null,
-    descricao_cnae: valorTexto(
-      info.cnae_fiscal_descricao,
-      leadBase.descricao_cnae || ''
-    )
+    descricao_cnae: valorTexto(info.cnae_fiscal_descricao, leadBase.descricao_cnae || '')
   };
-
-  return payload;
 };
 
 export default function VendedorTRR_Master() {
@@ -501,27 +482,65 @@ export default function VendedorTRR_Master() {
 
   const processarCNPJ = useCallback(async (cnpj, leadExistente = {}, opcoes = {}) => {
     const cnpjLimpo = normalizarCNPJ(cnpj);
+    const isDebug = cnpjLimpo === CNPJ_DEBUG;
 
     if (cnpjLimpo.length !== 14) {
       return { ok: false, erro: 'CNPJ inválido' };
     }
 
+    if (isDebug) {
+      console.log('================ DEBUG CNPJ ================');
+      console.log('CNPJ em teste:', cnpjLimpo);
+      console.log('Lead existente antes do enriquecimento:', leadExistente);
+    }
+
     const consulta = await consultarCNPJNaBrasilAPI(cnpjLimpo);
 
+    if (isDebug) {
+      console.log('Resposta completa de consultarCNPJNaBrasilAPI:', consulta);
+    }
+
     if (!consulta.ok) {
+      if (isDebug) {
+        console.log('Falha na consulta do CNPJ debug:', consulta.erro);
+        console.log('============================================');
+      }
       return { ok: false, erro: consulta.erro };
     }
 
     const info = consulta.dados || {};
+
+    if (isDebug) {
+      console.log('Dados brutos retornados pela API:', info);
+      console.log('logradouro retornado:', info.logradouro);
+      console.log('numero retornado:', info.numero);
+      console.log('bairro retornado:', info.bairro);
+      console.log('municipio retornado:', info.municipio);
+      console.log('uf retornado:', info.uf);
+      console.log('cep retornado:', info.cep);
+    }
+
     const payload = montarPayloadReceita(
       leadExistente,
       info,
       opcoes.fontePadrao || 'Busca Manual'
     );
 
-    const { error } = await supabase
+    if (isDebug) {
+      console.log('Payload final enviado ao Supabase:', payload);
+      console.log('Payload.logradouro:', payload.logradouro);
+      console.log('Payload.numero:', payload.numero);
+    }
+
+    const { data, error } = await supabase
       .from('empresas_mestre')
-      .upsert(payload, { onConflict: 'cnpj' });
+      .upsert(payload, { onConflict: 'cnpj' })
+      .select();
+
+    if (isDebug) {
+      console.log('Resultado do upsert no Supabase:', { data, error });
+      console.log('============================================');
+    }
 
     if (error) {
       return { ok: false, erro: `Erro ao salvar no banco: ${error.message}` };
