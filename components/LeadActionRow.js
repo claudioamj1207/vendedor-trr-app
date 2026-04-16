@@ -46,12 +46,22 @@ function abrirRota(lead) {
 export default function LeadActionRow({
   lead,
   formatarCNPJ,
-  actions = []
+  actions = [],
+  onEnviarParaMeuToDo
 }) {
   const cnpjLimpo = String(lead?.cnpj || '').replace(/\D/g, '');
   const cnpjFormatado = formatarCNPJ
     ? formatarCNPJ(lead?.cnpj || '')
     : (lead?.cnpj || 'SEM CNPJ');
+
+  function handleEnviarParaMeuToDo() {
+    if (!onEnviarParaMeuToDo) {
+      window.alert('A função de envio para o Meu To Do ainda não foi ligada nesta tela.');
+      return;
+    }
+
+    onEnviarParaMeuToDo(lead);
+  }
 
   return (
     <div className="px-4 py-3 border-b border-zinc-800/60 hover:bg-zinc-900/60 transition-colors">
@@ -103,6 +113,15 @@ export default function LeadActionRow({
         </div>
 
         <div className="flex gap-1.5 flex-wrap justify-start xl:justify-end shrink-0">
+          <button
+            type="button"
+            onClick={handleEnviarParaMeuToDo}
+            title="Enviar para Meu To Do"
+            className="px-3 py-1.5 text-[10px] rounded-lg font-black uppercase tracking-wide bg-violet-700 text-white hover:bg-violet-600 active:scale-95 transition-all shadow-sm"
+          >
+            MEU TO DO
+          </button>
+
           <button
             type="button"
             onClick={() => abrirRota(lead)}
