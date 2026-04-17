@@ -995,6 +995,43 @@ export default function VendedorTRR_Master() {
     }
   }, [limparMensagens, sincronizar]);
 
+  const enviarLeadParaMeuToDo = useCallback(async (lead) => {
+    try {
+      limparMensagens();
+
+      const payload = {
+        lead_id: lead.id ? String(lead.id) : normalizarCNPJ(lead.cnpj || ''),
+        cnpj: normalizarCNPJ(lead.cnpj || ''),
+        razao_social: valorTexto(lead.razao_social),
+        nome_fantasia: valorTexto(lead.nome_fantasia),
+        logradouro: valorTexto(lead.logradouro),
+        numero: valorTexto(lead.numero),
+        bairro: valorTexto(lead.bairro),
+        municipio: valorTexto(lead.municipio),
+        uf: valorTexto(lead.uf),
+        cep: valorTexto(lead.cep),
+        contato_nome: valorTexto(lead.contato_nome),
+        telefone_1: valorTexto(lead.telefone_1),
+        email: valorTexto(lead.email),
+        observacoes: valorTexto(lead.observacoes),
+        status_origem: valorTexto(lead.status_lead || STATUS_LEAD.MESA_DE_TRABALHO),
+        processado: false,
+        processado_em: null
+      };
+
+      const { error } = await supabase
+        .from('fila_meu_todo')
+        .insert(payload);
+
+      if (error) throw error;
+
+      setResultadoBusca('Lead enviado para o Meu To Do com sucesso.');
+    } catch (error) {
+      console.error('Erro ao enviar lead para o Meu To Do:', error);
+      setErroBusca(`Erro ao enviar para o Meu To Do: ${error.message || 'falha ao gravar na fila.'}`);
+    }
+  }, [limparMensagens]);
+
   const deletarLead = useCallback(async (lead) => {
     try {
       const confirmar = window.confirm(
@@ -1439,9 +1476,10 @@ export default function VendedorTRR_Master() {
         lead={lead}
         formatarCNPJ={formatarCNPJ}
         actions={actions}
+        onEnviarParaMeuToDo={aba === ABAS.MESA ? enviarLeadParaMeuToDo : undefined}
       />
     );
-  }, [aba, montarAcoesEstoque, montarAcoesMesa, montarAcoesTriagem]);
+  }, [aba, montarAcoesEstoque, montarAcoesMesa, montarAcoesTriagem, enviarLeadParaMeuToDo]);
 
   const tituloPrincipal = useMemo(() => {
     if (moduloAtivo === MODULOS.PESCARIA) return 'Pescaria de CNPJ';
