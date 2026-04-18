@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '../../../../lib/supabase';
-import { consultarCNPJNaBrasilAPI } from '../../../../lib/brasilApi';
+import { supabase } from '../../../lib/supabase';
+import { consultarCNPJNaBrasilAPI } from '../../../lib/brasilApi';
 
 const STATUS_LEAD = {
   NOVO: 'Novo',
@@ -57,7 +57,11 @@ const montarCNAESecundario = (cnaesSecundarios) => {
     .join(' | ');
 };
 
-const montarPayloadReceita = (leadExistente = {}, info = {}, fontePadrao = 'Meu To Do - aba CNPJ') => {
+const montarPayloadReceita = (
+  leadExistente = {},
+  info = {},
+  fontePadrao = 'Meu To Do - aba CNPJ'
+) => {
   return {
     ...leadExistente,
     cnpj: normalizarCNPJ(info.cnpj || leadExistente.cnpj || ''),
