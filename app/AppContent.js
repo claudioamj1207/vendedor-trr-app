@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 import LeadVisualModal from '../components/LeadVisualModal';
 import IncrementarLeadModal from '../components/IncrementarLeadModal';
 import LeadActionRow from '../components/LeadActionRow';
+import VisaoAnalitica from '../components/VisaoAnalitica';
 
 const STATUS_LEAD = {
   NOVO: 'Novo',
@@ -16,7 +17,8 @@ const STATUS_LEAD = {
 
 const MODULOS = {
   TODO: 'todo',
-  PESCARIA: 'pescaria'
+  PESCARIA: 'pescaria',
+  ANALITICA: 'analitica'
 };
 
 const ABAS = {
@@ -656,12 +658,14 @@ export default function VendedorTRR_Master() {
         .select('*')
         .order('razao_social', { ascending: true });
 
-      if (aba === ABAS.ESTOQUE) {
-        query = query.eq('status_lead', STATUS_LEAD.NOVO);
-      } else if (aba === ABAS.TRIAGEM) {
-        query = query.eq('status_lead', STATUS_LEAD.TRIAGEM);
-      } else if (aba === ABAS.MESA) {
-        query = query.eq('status_lead', STATUS_LEAD.MESA_DE_TRABALHO);
+      if (moduloAtivo === MODULOS.TODO) {
+        if (aba === ABAS.ESTOQUE) {
+          query = query.eq('status_lead', STATUS_LEAD.NOVO);
+        } else if (aba === ABAS.TRIAGEM) {
+          query = query.eq('status_lead', STATUS_LEAD.TRIAGEM);
+        } else if (aba === ABAS.MESA) {
+          query = query.eq('status_lead', STATUS_LEAD.MESA_DE_TRABALHO);
+        }
       }
 
       let todosLeads = [];
@@ -692,7 +696,7 @@ export default function VendedorTRR_Master() {
     } finally {
       setCarregando(false);
     }
-  }, [aba]);
+  }, [aba, moduloAtivo]);
 
   useEffect(() => {
     sincronizar();
@@ -1483,6 +1487,7 @@ export default function VendedorTRR_Master() {
 
   const tituloPrincipal = useMemo(() => {
     if (moduloAtivo === MODULOS.PESCARIA) return 'Pescaria de CNPJ';
+    if (moduloAtivo === MODULOS.ANALITICA) return 'Visão Analítica';
     if (aba === ABAS.TRIAGEM) return 'Triagem';
     if (aba === ABAS.MESA) return 'Mesa de Trabalho';
     return 'Estoque';
@@ -1510,13 +1515,13 @@ export default function VendedorTRR_Master() {
           </div>
 
           <div className="flex gap-3 text-[9px] font-bold uppercase shrink-0">
-            {[MODULOS.TODO, MODULOS.PESCARIA].map((m) => (
+            {[MODULOS.TODO, MODULOS.PESCARIA, MODULOS.ANALITICA].map((m) => (
               <button
                 key={m}
                 onClick={() => trocarModulo(m)}
                 className={moduloAtivo === m ? 'text-white border-b border-blue-500' : 'text-zinc-600'}
               >
-                {m === MODULOS.TODO ? 'LISTA' : 'PESCARIA DE CNPJ'}
+                {m === MODULOS.TODO ? 'LISTA' : m === MODULOS.PESCARIA ? 'PESCARIA DE CNPJ' : 'VISÃO ANALÍTICA'}
               </button>
             ))}
           </div>
@@ -1553,12 +1558,14 @@ export default function VendedorTRR_Master() {
               </>
             )}
 
-            <button
-              onClick={() => setMostrarFiltros(!mostrarFiltros)}
-              className="text-[9px] bg-zinc-800 px-4 py-2 rounded-full font-bold border border-white/10"
-            >
-              FILTROS
-            </button>
+            {moduloAtivo !== MODULOS.ANALITICA && (
+              <button
+                onClick={() => setMostrarFiltros(!mostrarFiltros)}
+                className="text-[9px] bg-zinc-800 px-4 py-2 rounded-full font-bold border border-white/10"
+              >
+                FILTROS
+              </button>
+            )}
           </div>
         </div>
 
@@ -1784,6 +1791,14 @@ export default function VendedorTRR_Master() {
               </div>
             )}
           </>
+        )}
+
+        {moduloAtivo === MODULOS.ANALITICA && (
+          <VisaoAnalitica
+            leads={leads}
+            totalAbsoluto={totalAbsoluto}
+            carregando={carregando}
+          />
         )}
 
         {moduloAtivo === MODULOS.PESCARIA && (
