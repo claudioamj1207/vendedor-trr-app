@@ -1,355 +1,340 @@
 "use client";
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 
-const normalizarTexto = (valor) => String(valor || '').trim();
+const texto = (valor, fallback = 'Não informado') => {
+  const limpo = String(valor || '').trim();
+  if (!limpo || limpo.toLowerCase() === 'null' || limpo.toLowerCase() === 'undefined') return fallback;
+  return limpo;
+};
 
-const numeroBR = (valor) => {
+const numeroBR = (valor) => Number(valor || 0).toLocaleString('pt-BR');
+const percentual = (parte, total) => (!total ? 0 : Math.round((parte / total) * 100));
+const moedaBR = (valor) => {
   const numero = Number(valor || 0);
-  return numero.toLocaleString('pt-BR');
+  if (!numero) return 'R$ 0';
+  return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 };
 
-const percentualBR = (parte, total) => {
-  if (!total) return '0%';
-  return `${Math.round((parte / total) * 100)}%`;
+const normalizar = (valor) => texto(valor, '').toLowerCase();
+
+const SEGMENTOS_ESTRATEGICOS = [
+  {
+    nome: 'Transporte, logística e frota',
+    cor: 'blue',
+    peso: 5,
+    termos: ['transporte', 'carga', 'cargas', 'logística', 'logistica', 'rodoviário', 'rodoviario', 'fretamento', 'coletivo', 'passageiros', 'armazém', 'armazem', 'depósito', 'deposito', 'entrega', 'mudança', 'locação de veículos', 'locacao de veiculos']
+  },
+  {
+    nome: 'Construção, obras e infraestrutura',
+    cor: 'yellow',
+    peso: 5,
+    termos: ['construção', 'construcao', 'obras', 'engenharia', 'terraplenagem', 'pavimentação', 'pavimentacao', 'instalações', 'instalacoes', 'edifícios', 'edificios', 'rodovia', 'empreiteira', 'construtora']
+  },
+  {
+    nome: 'Indústria e produção',
+    cor: 'violet',
+    peso: 4,
+    termos: ['fabricação', 'fabricacao', 'indústria', 'industria', 'produção', 'producao', 'metal', 'plástico', 'plastico', 'madeira', 'máquinas', 'maquinas', 'equipamentos', 'transformação', 'transformacao']
+  },
+  {
+    nome: 'Agro, pesca e alimentos',
+    cor: 'emerald',
+    peso: 4,
+    termos: ['agro', 'agricultura', 'pecuária', 'pecuaria', 'pesca', 'aquicultura', 'alimentos', 'frigorífico', 'frigorifico', 'abate', 'grãos', 'graos', 'fazenda', 'cultivo', 'horticultura']
+  },
+  {
+    nome: 'Energia, geradores e utilidades',
+    cor: 'cyan',
+    peso: 4,
+    termos: ['energia', 'eletricidade', 'geração', 'geracao', 'gerador', 'manutenção elétrica', 'manutencao eletrica', 'climatização', 'climatizacao', 'refrigeração', 'refrigeracao', 'água', 'agua', 'saneamento']
+  },
+  {
+    nome: 'Comércio atacadista',
+    cor: 'orange',
+    peso: 3,
+    termos: ['comércio atacadista', 'comercio atacadista', 'atacadista', 'distribuição', 'distribuicao', 'distribuidora', 'representantes comerciais']
+  },
+  {
+    nome: 'Serviços operacionais',
+    cor: 'pink',
+    peso: 2,
+    termos: ['limpeza', 'segurança', 'seguranca', 'manutenção', 'manutencao', 'serviços combinados', 'servicos combinados', 'apoio administrativo', 'locação', 'locacao']
+  }
+];
+
+const classes = {
+  blue: 'bg-blue-950/40 border-blue-500/25 text-blue-100',
+  yellow: 'bg-yellow-950/35 border-yellow-500/25 text-yellow-100',
+  violet: 'bg-violet-950/40 border-violet-500/25 text-violet-100',
+  emerald: 'bg-emerald-950/40 border-emerald-500/25 text-emerald-100',
+  cyan: 'bg-cyan-950/40 border-cyan-500/25 text-cyan-100',
+  orange: 'bg-orange-950/40 border-orange-500/25 text-orange-100',
+  pink: 'bg-pink-950/40 border-pink-500/25 text-pink-100',
+  red: 'bg-red-950/40 border-red-500/25 text-red-100',
+  zinc: 'bg-zinc-900/60 border-white/5 text-white'
 };
 
-const temValor = (valor) => {
-  const texto = normalizarTexto(valor).toLowerCase();
-  return texto && texto !== 'não informado' && texto !== 'nao informado' && texto !== 'null' && texto !== 'undefined';
+const detectarSegmento = (lead) => {
+  const base = `${normalizar(lead.cnae_principal_descricao)} ${normalizar(lead.cnae_secundario)} ${normalizar(lead.razao_social)} ${normalizar(lead.nome_fantasia)} ${normalizar(lead.categoria_trr)} ${normalizar(lead.potencial_consumo)}`;
+
+  for (const segmento of SEGMENTOS_ESTRATEGICOS) {
+    if (segmento.termos.some((termo) => base.includes(termo))) {
+      return segmento;
+    }
+  }
+
+  return { nome: 'Outros / não classificado', cor: 'zinc', peso: 1, termos: [] };
 };
 
-const temTelefone = (lead) => temValor(lead.telefone_1) || temValor(lead.telefone_2);
-const temEmail = (lead) => temValor(lead.email);
-const temContato = (lead) => temValor(lead.contato_nome);
-const temEndereco = (lead) =>
-  temValor(lead.logradouro) &&
-  temValor(lead.bairro) &&
-  temValor(lead.municipio) &&
-  temValor(lead.uf);
-const estaAtivo = (lead) => normalizarTexto(lead.situacao_cadastral).toUpperCase().includes('ATIVA');
+const scoreComercial = (lead) => {
+  const segmento = detectarSegmento(lead);
+  let pontos = segmento.peso * 10;
+  const capital = Number(lead.capital_social || 0);
 
-const contarPorCampo = (leads, campo, limite = 10) => {
-  const mapa = new Map();
+  if (capital >= 1000000) pontos += 20;
+  else if (capital >= 300000) pontos += 12;
+  else if (capital >= 100000) pontos += 7;
 
-  leads.forEach((lead) => {
-    const valor = normalizarTexto(lead[campo]) || 'Não informado';
-    mapa.set(valor, (mapa.get(valor) || 0) + 1);
-  });
-
-  return Array.from(mapa.entries())
-    .map(([nome, total]) => ({ nome, total }))
-    .sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome, 'pt-BR'))
-    .slice(0, limite);
-};
-
-const calcularPontuacao = (lead) => {
-  let pontos = 0;
-
-  if (estaAtivo(lead)) pontos += 3;
-  if (temTelefone(lead)) pontos += 2;
-  if (temEmail(lead)) pontos += 1;
-  if (temEndereco(lead)) pontos += 2;
-  if (temContato(lead)) pontos += 2;
-  if (temValor(lead.cnae_principal_descricao)) pontos += 1;
-  if (Number(lead.capital_social || 0) > 0) pontos += 1;
-  if (temValor(lead.categoria_trr)) pontos += 1;
-  if (temValor(lead.potencial_consumo) && lead.potencial_consumo !== 'Nao Avaliado') pontos += 1;
+  if (normalizar(lead.situacao_cadastral).includes('ativa')) pontos += 10;
+  if (texto(lead.municipio, '').toLowerCase().includes('manaus')) pontos += 4;
+  if (texto(lead.uf, '').toUpperCase() === 'AM' || texto(lead.uf, '').toUpperCase() === 'RR') pontos += 4;
+  if (texto(lead.fonte_lead, '').toLowerCase().includes('arquivo')) pontos += 2;
 
   return pontos;
 };
 
-const corPorPercentual = (percentual) => {
-  if (percentual >= 75) return 'emerald';
-  if (percentual >= 45) return 'blue';
-  if (percentual >= 20) return 'yellow';
-  return 'red';
+const agrupar = (leads, resolverNome, limite = 12) => {
+  const mapa = new Map();
+
+  leads.forEach((lead) => {
+    const nome = resolverNome(lead) || 'Não informado';
+    const atual = mapa.get(nome) || { nome, total: 0, capital: 0, score: 0, exemplos: [] };
+    atual.total += 1;
+    atual.capital += Number(lead.capital_social || 0);
+    atual.score += scoreComercial(lead);
+    if (atual.exemplos.length < 3) atual.exemplos.push(texto(lead.razao_social));
+    mapa.set(nome, atual);
+  });
+
+  return Array.from(mapa.values())
+    .sort((a, b) => b.total - a.total || b.score - a.score || a.nome.localeCompare(b.nome, 'pt-BR'))
+    .slice(0, limite);
 };
 
-const classesCor = {
-  blue: {
-    card: 'bg-blue-950/40 border-blue-500/30 shadow-blue-950/30',
-    texto: 'text-blue-300',
-    numero: 'text-blue-100',
-    barra: 'bg-blue-500',
-    badge: 'bg-blue-500/15 text-blue-200 border-blue-400/20'
-  },
-  emerald: {
-    card: 'bg-emerald-950/40 border-emerald-500/30 shadow-emerald-950/30',
-    texto: 'text-emerald-300',
-    numero: 'text-emerald-100',
-    barra: 'bg-emerald-500',
-    badge: 'bg-emerald-500/15 text-emerald-200 border-emerald-400/20'
-  },
-  yellow: {
-    card: 'bg-yellow-950/35 border-yellow-500/30 shadow-yellow-950/30',
-    texto: 'text-yellow-300',
-    numero: 'text-yellow-100',
-    barra: 'bg-yellow-500',
-    badge: 'bg-yellow-500/15 text-yellow-200 border-yellow-400/20'
-  },
-  red: {
-    card: 'bg-red-950/35 border-red-500/30 shadow-red-950/30',
-    texto: 'text-red-300',
-    numero: 'text-red-100',
-    barra: 'bg-red-500',
-    badge: 'bg-red-500/15 text-red-200 border-red-400/20'
-  },
-  violet: {
-    card: 'bg-violet-950/40 border-violet-500/30 shadow-violet-950/30',
-    texto: 'text-violet-300',
-    numero: 'text-violet-100',
-    barra: 'bg-violet-500',
-    badge: 'bg-violet-500/15 text-violet-200 border-violet-400/20'
-  },
-  cyan: {
-    card: 'bg-cyan-950/40 border-cyan-500/30 shadow-cyan-950/30',
-    texto: 'text-cyan-300',
-    numero: 'text-cyan-100',
-    barra: 'bg-cyan-500',
-    badge: 'bg-cyan-500/15 text-cyan-200 border-cyan-400/20'
-  },
-  zinc: {
-    card: 'bg-zinc-900/60 border-white/5 shadow-black/20',
-    texto: 'text-zinc-400',
-    numero: 'text-white',
-    barra: 'bg-zinc-500',
-    badge: 'bg-zinc-500/15 text-zinc-200 border-white/10'
-  }
-};
-
-const CardIndicador = ({ titulo, valor, subtitulo, cor = 'zinc', percentual = null, alerta = false }) => {
-  const c = classesCor[cor] || classesCor.zinc;
-
+const Barra = ({ valor, total, cor = 'bg-blue-500' }) => {
+  const pct = percentual(valor, total);
   return (
-    <div className={`rounded-3xl border p-5 shadow-lg ${c.card}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${c.texto}`}>{titulo}</p>
-          <p className={`text-3xl font-black tracking-tighter ${c.numero}`}>{valor}</p>
-        </div>
-        {alerta && (
-          <span className="text-[10px] font-black bg-red-500/20 border border-red-400/20 text-red-200 px-2 py-1 rounded-full shrink-0">
-            ATENÇÃO
-          </span>
-        )}
-      </div>
+    <div className="mt-2 h-2 bg-black/40 rounded-full overflow-hidden border border-white/5">
+      <div className={`h-full ${cor}`} style={{ width: `${Math.min(100, pct)}%` }} />
+    </div>
+  );
+};
 
-      {subtitulo && <p className="text-[11px] text-zinc-300/80 mt-2 leading-relaxed">{subtitulo}</p>}
+const CardResumo = ({ titulo, valor, subtitulo, cor = 'zinc' }) => (
+  <div className={`rounded-3xl border p-5 ${classes[cor] || classes.zinc}`}>
+    <p className="text-[10px] uppercase tracking-widest font-black opacity-75">{titulo}</p>
+    <p className="text-3xl font-black tracking-tighter mt-2">{valor}</p>
+    {subtitulo && <p className="text-[11px] text-zinc-300 mt-2 leading-relaxed">{subtitulo}</p>}
+  </div>
+);
 
-      {percentual !== null && (
-        <div className="mt-4">
-          <div className="h-2 rounded-full bg-black/35 overflow-hidden border border-white/5">
-            <div className={`h-full rounded-full ${c.barra}`} style={{ width: `${Math.max(2, Math.min(100, percentual))}%` }} />
+const ListaRanking = ({ titulo, itens, total, corBarra = 'bg-blue-500', mostrarCapital = false }) => (
+  <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-5">
+    <div className="flex items-center justify-between gap-4 mb-4">
+      <h3 className="text-sm font-black uppercase tracking-wide text-white">{titulo}</h3>
+      <span className="text-[10px] text-zinc-500 font-black uppercase">Top {itens.length}</span>
+    </div>
+
+    <div className="space-y-3">
+      {itens.map((item, index) => (
+        <div key={`${item.nome}-${index}`} className="bg-black/25 border border-white/5 rounded-2xl p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-black text-white leading-snug">{index + 1}. {item.nome}</p>
+              <p className="text-[10px] text-zinc-500 mt-1 truncate">{item.exemplos.join(' • ')}</p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-sm font-black text-white">{numeroBR(item.total)}</p>
+              <p className="text-[9px] text-zinc-500 uppercase">{percentual(item.total, total)}%</p>
+            </div>
           </div>
-          <p className={`text-[10px] font-black mt-2 ${c.texto}`}>{percentual}% da base analisada</p>
+          <Barra valor={item.total} total={total} cor={corBarra} />
+          {mostrarCapital && (
+            <p className="text-[10px] text-zinc-400 mt-2">Capital social somado: <span className="text-zinc-200 font-bold">{moedaBR(item.capital)}</span></p>
+          )}
         </div>
-      )}
+      ))}
     </div>
-  );
-};
+  </div>
+);
 
-const BarraRanking = ({ item, total, cor = 'blue' }) => {
-  const largura = total ? Math.max(6, Math.round((item.total / total) * 100)) : 0;
-  const c = classesCor[cor] || classesCor.blue;
+export default function AnaliticaVendas({ leads = [], totalAbsoluto = 0, carregando = false }) {
+  const [modoOrdenacao, setModoOrdenacao] = useState('volume');
 
-  return (
-    <div className="space-y-1">
-      <div className="flex justify-between gap-3 text-[11px]">
-        <span className="text-zinc-200 font-bold truncate">{item.nome}</span>
-        <span className={`font-black shrink-0 ${c.texto}`}>{numeroBR(item.total)}</span>
-      </div>
-      <div className="h-2.5 rounded-full bg-black/40 border border-white/5 overflow-hidden">
-        <div className={`h-full rounded-full ${c.barra}`} style={{ width: `${largura}%` }} />
-      </div>
-    </div>
-  );
-};
-
-const BlocoRanking = ({ titulo, itens, totalBase, cor = 'blue' }) => {
-  const c = classesCor[cor] || classesCor.blue;
-
-  return (
-    <div className={`border rounded-3xl p-5 ${c.card}`}>
-      <h3 className="text-sm font-black uppercase tracking-widest text-white mb-4">{titulo}</h3>
-      {itens.length === 0 ? (
-        <p className="text-[11px] text-zinc-500">Sem dados suficientes.</p>
-      ) : (
-        <div className="space-y-4">
-          {itens.map((item) => (
-            <BarraRanking key={item.nome} item={item} total={totalBase || itens[0]?.total || 1} cor={cor} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-const Pill = ({ children, cor = 'blue' }) => {
-  const c = classesCor[cor] || classesCor.blue;
-  return <span className={`text-[10px] font-black uppercase tracking-widest border px-3 py-1.5 rounded-full ${c.badge}`}>{children}</span>;
-};
-
-export default function VisaoAnalitica({ leads = [], totalAbsoluto = 0, carregando = false }) {
-  const analise = useMemo(() => {
+  const dados = useMemo(() => {
     const total = leads.length;
-    const ativos = leads.filter(estaAtivo).length;
-    const comTelefone = leads.filter(temTelefone).length;
-    const comEmail = leads.filter(temEmail).length;
-    const comEndereco = leads.filter(temEndereco).length;
-    const comContato = leads.filter(temContato).length;
-    const semTelefone = total - comTelefone;
-    const semEmail = total - comEmail;
-    const semEndereco = total - comEndereco;
-    const semCnae = leads.filter((lead) => !temValor(lead.cnae_principal_descricao)).length;
+    const classificados = leads.map((lead) => ({
+      ...lead,
+      segmentoCalculado: detectarSegmento(lead),
+      scoreVenda: scoreComercial(lead)
+    }));
 
-    const completos = leads.filter((lead) =>
-      estaAtivo(lead) && temTelefone(lead) && temEmail(lead) && temEndereco(lead)
-    ).length;
+    const porSegmentoMap = new Map();
+    classificados.forEach((lead) => {
+      const seg = lead.segmentoCalculado;
+      const atual = porSegmentoMap.get(seg.nome) || {
+        nome: seg.nome,
+        cor: seg.cor,
+        total: 0,
+        capital: 0,
+        score: 0,
+        exemplos: []
+      };
+      atual.total += 1;
+      atual.capital += Number(lead.capital_social || 0);
+      atual.score += lead.scoreVenda;
+      if (atual.exemplos.length < 4) atual.exemplos.push(texto(lead.razao_social));
+      porSegmentoMap.set(seg.nome, atual);
+    });
 
-    const pctAtivos = total ? Math.round((ativos / total) * 100) : 0;
-    const pctTelefone = total ? Math.round((comTelefone / total) * 100) : 0;
-    const pctEmail = total ? Math.round((comEmail / total) * 100) : 0;
-    const pctEndereco = total ? Math.round((comEndereco / total) * 100) : 0;
-    const pctContato = total ? Math.round((comContato / total) * 100) : 0;
-    const pctCompletos = total ? Math.round((completos / total) * 100) : 0;
+    let porSegmento = Array.from(porSegmentoMap.values());
+    porSegmento = porSegmento.sort((a, b) => {
+      if (modoOrdenacao === 'score') return b.score - a.score || b.total - a.total;
+      if (modoOrdenacao === 'capital') return b.capital - a.capital || b.total - a.total;
+      return b.total - a.total || b.score - a.score;
+    });
 
-    const topOportunidades = [...leads]
-      .map((lead) => ({
-        ...lead,
-        pontuacao_analitica: calcularPontuacao(lead)
-      }))
-      .sort((a, b) => b.pontuacao_analitica - a.pontuacao_analitica || normalizarTexto(a.razao_social).localeCompare(normalizarTexto(b.razao_social), 'pt-BR'))
+    const topCnaes = agrupar(classificados, (lead) => texto(lead.cnae_principal_descricao), 15);
+    const topMunicipios = agrupar(classificados, (lead) => `${texto(lead.municipio)} / ${texto(lead.uf, '')}`, 10);
+    const topPorte = agrupar(classificados, (lead) => texto(lead.porte), 8);
+    const topPotenciais = classificados
+      .sort((a, b) => b.scoreVenda - a.scoreVenda || texto(a.razao_social).localeCompare(texto(b.razao_social), 'pt-BR'))
       .slice(0, 12);
 
-    return {
-      total,
-      ativos,
-      comTelefone,
-      comEmail,
-      comEndereco,
-      comContato,
-      semTelefone,
-      semEmail,
-      semEndereco,
-      semCnae,
-      completos,
-      pctAtivos,
-      pctTelefone,
-      pctEmail,
-      pctEndereco,
-      pctContato,
-      pctCompletos,
-      porStatusLead: contarPorCampo(leads, 'status_lead', 8),
-      porStatusVendedor: contarPorCampo(leads, 'status_vendedor', 8),
-      porMunicipio: contarPorCampo(leads, 'municipio', 10),
-      porBairro: contarPorCampo(leads, 'bairro', 10),
-      porCnae: contarPorCampo(leads, 'cnae_principal_descricao', 10),
-      porSituacao: contarPorCampo(leads, 'situacao_cadastral', 8),
-      topOportunidades
-    };
-  }, [leads]);
+    const segmentosQuentes = porSegmento.filter((s) => !s.nome.includes('Outros')).reduce((acc, s) => acc + s.total, 0);
+    const capitalSomado = classificados.reduce((acc, lead) => acc + Number(lead.capital_social || 0), 0);
+    const cnaesDistintos = new Set(classificados.map((lead) => texto(lead.cnae_principal_descricao)).filter((v) => v !== 'Não informado')).size;
+
+    return { total, porSegmento, topCnaes, topMunicipios, topPorte, topPotenciais, segmentosQuentes, capitalSomado, cnaesDistintos };
+  }, [leads, modoOrdenacao]);
 
   if (carregando) {
     return (
       <div className="text-center py-20 text-[10px] animate-pulse text-zinc-600 font-black uppercase tracking-widest">
-        Montando visão analítica...
+        Montando analítica de vendas...
       </div>
     );
   }
 
-  if (!analise.total) {
+  if (!dados.total) {
     return (
-      <div className="bg-zinc-900/40 border border-white/5 rounded-3xl p-8 text-center">
-        <p className="text-sm font-black uppercase tracking-widest text-zinc-400">Nenhum lead encontrado para análise</p>
+      <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-8 text-center">
+        <p className="text-sm font-black uppercase text-zinc-400">Nenhum lead carregado para análise comercial.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-blue-950/60 via-violet-950/50 to-emerald-950/50 border border-blue-500/20 rounded-3xl p-5 shadow-lg shadow-blue-950/20">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+    <section className="space-y-6">
+      <div className="bg-gradient-to-br from-blue-950/40 via-zinc-950 to-emerald-950/30 border border-white/10 rounded-3xl p-6 overflow-hidden relative">
+        <div className="absolute -right-20 -top-20 w-56 h-56 bg-blue-500/10 rounded-full blur-3xl" />
+        <div className="absolute -left-20 -bottom-20 w-56 h-56 bg-emerald-500/10 rounded-full blur-3xl" />
+        <div className="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-blue-300 mb-2">Radar do Banco</p>
-            <p className="text-[12px] text-zinc-200/85 leading-relaxed max-w-4xl">
-              Esta tela é somente analítica. Ela lê os leads carregados do Supabase e mostra qualidade, distribuição e prioridade de trabalho sem alterar nenhum registro.
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-300">Radar Comercial por Segmentos</p>
+            <h2 className="text-2xl md:text-4xl font-black italic uppercase tracking-tighter mt-2 text-white">Onde estão as melhores frentes de venda?</h2>
+            <p className="text-sm text-zinc-400 mt-3 max-w-3xl leading-relaxed">
+              Esta aba não mede qualidade de cadastro. Ela cruza CNAE principal, CNAE secundário, porte, capital social, município e termos estratégicos para mostrar segmentos com maior potencial de consumo contínuo de diesel.
             </p>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <Pill cor="emerald">Base ativa</Pill>
-            <Pill cor="blue">Qualidade</Pill>
-            <Pill cor="violet">Prioridade</Pill>
+
+          <div className="bg-black/30 border border-white/10 rounded-2xl p-3 min-w-[230px]">
+            <label className="text-[9px] text-zinc-500 font-black uppercase tracking-widest block mb-2">Ordenar segmentos por</label>
+            <select
+              value={modoOrdenacao}
+              onChange={(e) => setModoOrdenacao(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-[11px] text-white outline-none"
+            >
+              <option value="volume">Volume de leads</option>
+              <option value="score">Potencial comercial</option>
+              <option value="capital">Capital social somado</option>
+            </select>
           </div>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <CardIndicador titulo="Total no banco" valor={numeroBR(totalAbsoluto || analise.total)} subtitulo={`${numeroBR(analise.total)} carregados na análise`} cor="blue" percentual={100} />
-        <CardIndicador titulo="Ativos" valor={numeroBR(analise.ativos)} subtitulo={percentualBR(analise.ativos, analise.total)} cor={corPorPercentual(analise.pctAtivos)} percentual={analise.pctAtivos} />
-        <CardIndicador titulo="Com telefone" valor={numeroBR(analise.comTelefone)} subtitulo={percentualBR(analise.comTelefone, analise.total)} cor={corPorPercentual(analise.pctTelefone)} percentual={analise.pctTelefone} />
-        <CardIndicador titulo="Com endereço" valor={numeroBR(analise.comEndereco)} subtitulo={percentualBR(analise.comEndereco, analise.total)} cor={corPorPercentual(analise.pctEndereco)} percentual={analise.pctEndereco} />
-        <CardIndicador titulo="Com e-mail" valor={numeroBR(analise.comEmail)} subtitulo={percentualBR(analise.comEmail, analise.total)} cor={corPorPercentual(analise.pctEmail)} percentual={analise.pctEmail} />
-        <CardIndicador titulo="Com contato" valor={numeroBR(analise.comContato)} subtitulo={percentualBR(analise.comContato, analise.total)} cor={corPorPercentual(analise.pctContato)} percentual={analise.pctContato} />
-        <CardIndicador titulo="Leads completos" valor={numeroBR(analise.completos)} subtitulo="Ativo + telefone + e-mail + endereço" cor={corPorPercentual(analise.pctCompletos)} percentual={analise.pctCompletos} />
-        <CardIndicador titulo="Sem telefone" valor={numeroBR(analise.semTelefone)} subtitulo="Prioridade para enriquecimento" cor={analise.semTelefone > 0 ? 'red' : 'emerald'} alerta={analise.semTelefone > 0} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <CardIndicador titulo="Sem e-mail" valor={numeroBR(analise.semEmail)} subtitulo="Pode exigir pesquisa manual" cor={analise.semEmail > 0 ? 'yellow' : 'emerald'} alerta={analise.semEmail > 0} />
-        <CardIndicador titulo="Sem endereço completo" valor={numeroBR(analise.semEndereco)} subtitulo="Afeta rota e análise territorial" cor={analise.semEndereco > 0 ? 'red' : 'emerald'} alerta={analise.semEndereco > 0} />
-        <CardIndicador titulo="Sem CNAE" valor={numeroBR(analise.semCnae)} subtitulo="Afeta segmentação" cor={analise.semCnae > 0 ? 'yellow' : 'emerald'} alerta={analise.semCnae > 0} />
-        <CardIndicador titulo="Taxa de completude" valor={percentualBR(analise.completos, analise.total)} subtitulo="Base dos melhores leads" cor={corPorPercentual(analise.pctCompletos)} percentual={analise.pctCompletos} />
+        <CardResumo titulo="Leads analisados" valor={numeroBR(dados.total)} subtitulo={`Total no banco: ${numeroBR(totalAbsoluto || dados.total)}`} cor="blue" />
+        <CardResumo titulo="CNAEs distintos" valor={numeroBR(dados.cnaesDistintos)} subtitulo="Variedade de atividades econômicas no estoque atual." cor="violet" />
+        <CardResumo titulo="Segmentos estratégicos" valor={`${percentual(dados.segmentosQuentes, dados.total)}%`} subtitulo={`${numeroBR(dados.segmentosQuentes)} leads caíram em grupos comerciais quentes.`} cor="emerald" />
+        <CardResumo titulo="Capital social mapeado" valor={moedaBR(dados.capitalSomado)} subtitulo="Soma dos capitais informados nos leads carregados." cor="yellow" />
+      </div>
+
+      <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-5">
+        <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-wide text-white">Separação analítica por segmento</h3>
+            <p className="text-[11px] text-zinc-500 mt-1">Classificação automática por palavras-chave dos CNAEs e descrição da empresa.</p>
+          </div>
+          <span className="text-[10px] text-zinc-500 font-black uppercase">{numeroBR(dados.porSegmento.length)} grupos</span>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {dados.porSegmento.map((segmento) => (
+            <div key={segmento.nome} className={`rounded-3xl border p-4 ${classes[segmento.cor] || classes.zinc}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-black uppercase leading-tight">{segmento.nome}</p>
+                  <p className="text-[10px] text-zinc-300 mt-2 truncate">{segmento.exemplos.join(' • ')}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-2xl font-black">{numeroBR(segmento.total)}</p>
+                  <p className="text-[9px] uppercase opacity-70">{percentual(segmento.total, dados.total)}%</p>
+                </div>
+              </div>
+              <Barra valor={segmento.total} total={dados.total} cor="bg-white/70" />
+              <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] text-zinc-300">
+                <div className="bg-black/20 rounded-xl p-2 border border-white/5">Score somado: <span className="font-black text-white">{numeroBR(segmento.score)}</span></div>
+                <div className="bg-black/20 rounded-xl p-2 border border-white/5">Capital: <span className="font-black text-white">{moedaBR(segmento.capital)}</span></div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        <BlocoRanking titulo="Funil por Status do Lead" itens={analise.porStatusLead} totalBase={analise.total} cor="blue" />
-        <BlocoRanking titulo="Status do Vendedor" itens={analise.porStatusVendedor} totalBase={analise.total} cor="violet" />
-        <BlocoRanking titulo="Municípios com mais leads" itens={analise.porMunicipio} totalBase={analise.total} cor="emerald" />
-        <BlocoRanking titulo="Bairros com mais leads" itens={analise.porBairro} totalBase={analise.total} cor="cyan" />
-        <BlocoRanking titulo="Situação cadastral" itens={analise.porSituacao} totalBase={analise.total} cor="yellow" />
-        <BlocoRanking titulo="CNAEs mais frequentes" itens={analise.porCnae} totalBase={analise.total} cor="red" />
+        <ListaRanking titulo="CNAEs mais frequentes" itens={dados.topCnaes} total={dados.total} corBarra="bg-violet-500" mostrarCapital />
+        <ListaRanking titulo="Municípios com maior volume" itens={dados.topMunicipios} total={dados.total} corBarra="bg-cyan-500" mostrarCapital />
       </div>
 
-      <div className="bg-gradient-to-br from-zinc-900/80 via-blue-950/20 to-violet-950/20 border border-blue-500/20 rounded-3xl p-5 shadow-lg shadow-blue-950/20">
-        <div className="flex justify-between items-center gap-3 mb-4 flex-wrap">
-          <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-white">Ranking de melhores oportunidades</h3>
-            <p className="text-[11px] text-zinc-400 mt-1">Pontuação simples baseada em ativo, telefone, e-mail, endereço, contato, CNAE e capital social.</p>
-          </div>
-          <Pill cor="blue">Top 12</Pill>
-        </div>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <ListaRanking titulo="Porte das empresas" itens={dados.topPorte} total={dados.total} corBarra="bg-yellow-500" mostrarCapital />
 
-        <div className="overflow-hidden rounded-2xl border border-white/5">
-          <div className="grid grid-cols-12 gap-2 bg-black/40 px-4 py-3 text-[9px] font-black uppercase tracking-widest text-zinc-400">
-            <div className="col-span-6">Lead</div>
-            <div className="col-span-2">Cidade</div>
-            <div className="col-span-2">Telefone</div>
-            <div className="col-span-2 text-right">Pontos</div>
+        <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-5">
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <h3 className="text-sm font-black uppercase tracking-wide text-white">Top oportunidades comerciais</h3>
+            <span className="text-[10px] text-zinc-500 font-black uppercase">Score automático</span>
           </div>
 
-          <div className="divide-y divide-white/5">
-            {analise.topOportunidades.map((lead, index) => {
-              const corLinha = index < 3 ? 'text-emerald-300 bg-emerald-500/5' : index < 6 ? 'text-blue-300 bg-blue-500/5' : 'text-zinc-300 bg-black/10';
-
-              return (
-                <div key={lead.cnpj || lead.id} className={`grid grid-cols-12 gap-2 px-4 py-3 text-[11px] items-center ${corLinha}`}>
-                  <div className="col-span-6 min-w-0">
-                    <p className="font-bold text-white truncate">{index + 1}. {lead.razao_social || lead.nome_fantasia || 'Sem nome'}</p>
-                    <p className="text-zinc-500 truncate">{lead.cnae_principal_descricao || 'CNAE não informado'}</p>
+          <div className="space-y-3">
+            {dados.topPotenciais.map((lead, index) => (
+              <div key={`${lead.cnpj || lead.razao_social}-${index}`} className="bg-black/25 border border-white/5 rounded-2xl p-3">
+                <div className="flex justify-between items-start gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-black text-white leading-snug">{index + 1}. {texto(lead.razao_social)}</p>
+                    <p className="text-[10px] text-blue-300 mt-1 truncate">{lead.segmentoCalculado.nome}</p>
+                    <p className="text-[10px] text-zinc-500 mt-1 truncate">{texto(lead.cnae_principal_descricao)}</p>
                   </div>
-                  <div className="col-span-2 text-zinc-300 truncate">{lead.municipio || '—'}</div>
-                  <div className="col-span-2 text-zinc-300 truncate">{lead.telefone_1 || lead.telefone_2 || '—'}</div>
-                  <div className="col-span-2 text-right font-black text-blue-300">
-                    <span className="inline-flex items-center justify-center min-w-8 px-2 py-1 rounded-full bg-blue-500/15 border border-blue-400/20">
-                      {lead.pontuacao_analitica}
-                    </span>
+                  <div className="text-right shrink-0">
+                    <p className="text-lg font-black text-emerald-300">{lead.scoreVenda}</p>
+                    <p className="text-[9px] uppercase text-zinc-500">pontos</p>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
