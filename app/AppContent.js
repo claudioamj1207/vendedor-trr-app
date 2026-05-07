@@ -7,6 +7,7 @@ import LeadVisualModal from '../components/LeadVisualModal';
 import IncrementarLeadModal from '../components/IncrementarLeadModal';
 import LeadActionRow from '../components/LeadActionRow';
 import VisaoAnalitica from '../components/VisaoAnalitica';
+import AnaliticaVendas from '../components/AnaliticaVendas';
 
 const STATUS_LEAD = {
   NOVO: 'Novo',
@@ -18,7 +19,8 @@ const STATUS_LEAD = {
 const MODULOS = {
   TODO: 'todo',
   PESCARIA: 'pescaria',
-  ANALITICA: 'analitica'
+  ANALITICA: 'analitica',
+  ANALITICA_VENDAS: 'analitica_vendas'
 };
 
 const ABAS = {
@@ -76,6 +78,13 @@ const CAMPOS_FILTRO = [
 
 const CAMPOS_COM_BUSCA_EXATA = Object.keys(FILTROS_INICIAIS);
 const ITENS_POR_PAGINA = 50;
+
+const ORDENACOES_LEADS = {
+  INCLUSAO_RECENTE: 'inclusao_recente',
+  INCLUSAO_ANTIGA: 'inclusao_antiga',
+  AZ: 'az',
+  ZA: 'za'
+};
 
 const normalizarCNPJ = (cnpj) => String(cnpj || '').replace(/\D/g, '');
 
@@ -369,6 +378,7 @@ export default function VendedorTRR_Master() {
   const [leadIncrementoSelecionado, setLeadIncrementoSelecionado] = useState(null);
   const [incrementarModalAberto, setIncrementarModalAberto] = useState(false);
   const [salvandoIncremento, setSalvandoIncremento] = useState(false);
+  const [ordenacaoLeads, setOrdenacaoLeads] = useState(ORDENACOES_LEADS.INCLUSAO_RECENTE);
 
   const limparMensagens = useCallback(() => {
     setResultadoBusca('');
@@ -449,6 +459,23 @@ export default function VendedorTRR_Master() {
     }));
   }, []);
 
+
+  const aplicarOrdenacaoQuery = useCallback((query) => {
+    if (ordenacaoLeads === ORDENACOES_LEADS.AZ) {
+      return query.order('razao_social', { ascending: true });
+    }
+
+    if (ordenacaoLeads === ORDENACOES_LEADS.ZA) {
+      return query.order('razao_social', { ascending: false });
+    }
+
+    if (ordenacaoLeads === ORDENACOES_LEADS.INCLUSAO_ANTIGA) {
+      return query.order('criado_em', { ascending: true, nullsFirst: false }).order('razao_social', { ascending: true });
+    }
+
+    return query.order('criado_em', { ascending: false, nullsFirst: false }).order('razao_social', { ascending: true });
+  }, [ordenacaoLeads]);
+
   const buscarTodosDoBanco = useCallback(async () => {
     let todos = [];
     let de = 0;
@@ -456,11 +483,11 @@ export default function VendedorTRR_Master() {
     let continua = true;
 
     while (continua) {
-      const { data, error } = await supabase
-        .from('empresas_mestre')
-        .select('*')
-        .order('razao_social', { ascending: true })
-        .range(de, ate);
+      const { data, error } = await aplicarOrdenacaoQuery(
+        supabase
+          .from('empresas_mestre')
+          .select('*')
+      ).range(de, ate);
 
       if (error) throw error;
 
@@ -475,7 +502,7 @@ export default function VendedorTRR_Master() {
     }
 
     return todos;
-  }, []);
+  }, [aplicarOrdenacaoQuery]);
 
   const exportarBackupBancoCompleto = useCallback(async () => {
     try {
@@ -620,15 +647,30 @@ export default function VendedorTRR_Master() {
     }
 
     const info = consulta.dados || {};
+    const situacaoReceita = String(info.descricao_situacao_cadastral || '').trim().toUpperCase();
+
+    if (situacaoReceita !== 'ATIVA') {
+      return {
+        ok: false,
+        erro: `CNPJ não salvo porque a situação cadastral é ${info.descricao_situacao_cadastral || 'não ativa'}.`
+      };
+    }
+
     const payload = montarPayloadReceita(
       leadExistente,
       info,
       opcoes.fontePadrao || 'Busca Manual'
     );
 
+    const payloadComAtualizacao = {
+      ...payload,
+      criado_em: new Date().toISOString(),
+      ultima_interacao: new Date().toISOString()
+    };
+
     const { error } = await supabase
       .from('empresas_mestre')
-      .upsert(payload, { onConflict: 'cnpj' });
+      .upsert(payloadComAtualizacao, { onConflict: 'cnpj' });
 
     if (error) {
       return { ok: false, erro: `Erro ao salvar no banco: ${error.message}` };
@@ -637,7 +679,7 @@ export default function VendedorTRR_Master() {
     return {
       ok: true,
       situacao: info.descricao_situacao_cadastral,
-      payloadSalvo: payload
+      payloadSalvo: payloadComAtualizacao
     };
   }, []);
 
@@ -653,10 +695,11 @@ export default function VendedorTRR_Master() {
 
       setTotalAbsoluto(totalBanco || 0);
 
-      let query = supabase
-        .from('empresas_mestre')
-        .select('*')
-        .order('razao_social', { ascending: true });
+      let query = aplicarOrdenacaoQuery(
+        supabase
+          .from('empresas_mestre')
+          .select('*')
+      );
 
       if (moduloAtivo === MODULOS.TODO) {
         if (aba === ABAS.ESTOQUE) {
@@ -1149,6 +1192,59 @@ export default function VendedorTRR_Master() {
     }
   }, [leadsFiltrados, limparMensagens, processarCNPJ, sincronizar]);
 
+
+  const excluirNaoAtivosDoBanco = useCallback(async () => {
+    if (!confirm('Excluir TODOS os leads que já estão marcados no banco como não ativos?\n\nRecomendação: faça backup XLSX antes. Esta ação não mexe nos ativos.')) {
+      return;
+    }
+
+    limparMensagens();
+    setStatusProcesso('Buscando leads não ativos no banco...');
+
+    try {
+      const todosLeads = await buscarTodosDoBanco();
+      const naoAtivos = (todosLeads || []).filter((lead) => {
+        const situacao = String(lead.situacao_cadastral || '').trim().toUpperCase();
+        return situacao && situacao !== 'ATIVA';
+      });
+
+      if (naoAtivos.length === 0) {
+        setStatusProcesso('');
+        setResultadoBusca('Nenhum lead não ativo encontrado para excluir.');
+        return;
+      }
+
+      if (!confirm(`Foram encontrados ${naoAtivos.length} lead(s) não ativo(s). Confirma excluir agora?`)) {
+        setStatusProcesso('');
+        return;
+      }
+
+      let excluidos = 0;
+      for (let i = 0; i < naoAtivos.length; i += 100) {
+        const lote = naoAtivos.slice(i, i + 100);
+        const cnpjs = lote.map((lead) => normalizarCNPJ(lead.cnpj)).filter(Boolean);
+
+        setStatusProcesso(`Excluindo não ativos ${Math.min(i + lote.length, naoAtivos.length)} de ${naoAtivos.length}...`);
+
+        const { error } = await supabase
+          .from('empresas_mestre')
+          .delete()
+          .in('cnpj', cnpjs);
+
+        if (error) throw error;
+        excluidos += cnpjs.length;
+      }
+
+      setStatusProcesso('');
+      setResultadoBusca(`${excluidos} lead(s) não ativo(s) excluído(s) do banco.`);
+      await sincronizar();
+    } catch (error) {
+      console.error('Erro ao excluir não ativos:', error);
+      setStatusProcesso('');
+      setErroBusca(`Erro ao excluir não ativos: ${error.message || 'falha na exclusão.'}`);
+    }
+  }, [buscarTodosDoBanco, limparMensagens, sincronizar]);
+
   const atualizarFaltantes = useCallback(async () => {
     limparMensagens();
     setUltimosCnpjsFalhados([]);
@@ -1488,6 +1584,7 @@ export default function VendedorTRR_Master() {
   const tituloPrincipal = useMemo(() => {
     if (moduloAtivo === MODULOS.PESCARIA) return 'Pescaria de CNPJ';
     if (moduloAtivo === MODULOS.ANALITICA) return 'Visão Analítica';
+    if (moduloAtivo === MODULOS.ANALITICA_VENDAS) return 'Analítica de Vendas';
     if (aba === ABAS.TRIAGEM) return 'Triagem';
     if (aba === ABAS.MESA) return 'Mesa de Trabalho';
     return 'Estoque';
@@ -1515,13 +1612,19 @@ export default function VendedorTRR_Master() {
           </div>
 
           <div className="flex gap-3 text-[9px] font-bold uppercase shrink-0">
-            {[MODULOS.TODO, MODULOS.PESCARIA, MODULOS.ANALITICA].map((m) => (
+            {[MODULOS.TODO, MODULOS.PESCARIA, MODULOS.ANALITICA, MODULOS.ANALITICA_VENDAS].map((m) => (
               <button
                 key={m}
                 onClick={() => trocarModulo(m)}
                 className={moduloAtivo === m ? 'text-white border-b border-blue-500' : 'text-zinc-600'}
               >
-                {m === MODULOS.TODO ? 'LISTA' : m === MODULOS.PESCARIA ? 'PESCARIA DE CNPJ' : 'VISÃO ANALÍTICA'}
+                {m === MODULOS.TODO
+                  ? 'LISTA'
+                  : m === MODULOS.PESCARIA
+                    ? 'PESCARIA DE CNPJ'
+                    : m === MODULOS.ANALITICA
+                      ? 'VISÃO ANALÍTICA'
+                      : 'ANALÍTICA VENDAS'}
               </button>
             ))}
           </div>
@@ -1543,6 +1646,13 @@ export default function VendedorTRR_Master() {
                 </button>
 
                 <button
+                  onClick={excluirNaoAtivosDoBanco}
+                  className="text-[9px] bg-orange-600 px-4 py-2 rounded-full font-bold"
+                >
+                  🚫 NÃO ATIVOS
+                </button>
+
+                <button
                   onClick={atualizarFaltantes}
                   className="text-[9px] bg-emerald-600 px-4 py-2 rounded-full font-bold"
                 >
@@ -1558,7 +1668,7 @@ export default function VendedorTRR_Master() {
               </>
             )}
 
-            {moduloAtivo !== MODULOS.ANALITICA && (
+            {moduloAtivo !== MODULOS.ANALITICA && moduloAtivo !== MODULOS.ANALITICA_VENDAS && (
               <button
                 onClick={() => setMostrarFiltros(!mostrarFiltros)}
                 className="text-[9px] bg-zinc-800 px-4 py-2 rounded-full font-bold border border-white/10"
@@ -1578,6 +1688,26 @@ export default function VendedorTRR_Master() {
               value={buscaGlobal}
               onChange={(e) => setBuscaGlobal(e.target.value)}
             />
+
+            <div className="bg-zinc-900/70 border border-white/5 rounded-2xl p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">Ordenação do Estoque</p>
+                <p className="text-[11px] text-zinc-500 mt-1">
+                  Por padrão, os leads importados ou reimportados ficam no topo, como mais recentes.
+                </p>
+              </div>
+
+              <select
+                value={ordenacaoLeads}
+                onChange={(e) => setOrdenacaoLeads(e.target.value)}
+                className="bg-black border border-zinc-800 rounded-xl px-3 py-2 text-[11px] text-white outline-none min-w-[240px]"
+              >
+                <option value={ORDENACOES_LEADS.INCLUSAO_RECENTE}>Mais recentes primeiro</option>
+                <option value={ORDENACOES_LEADS.INCLUSAO_ANTIGA}>Mais antigos primeiro</option>
+                <option value={ORDENACOES_LEADS.AZ}>Razão social A → Z</option>
+                <option value={ORDENACOES_LEADS.ZA}>Razão social Z → A</option>
+              </select>
+            </div>
 
             {mostrarExportacao && (
               <div className="p-4 bg-zinc-900 rounded-2xl border border-blue-500/10 space-y-4">
@@ -1795,6 +1925,14 @@ export default function VendedorTRR_Master() {
 
         {moduloAtivo === MODULOS.ANALITICA && (
           <VisaoAnalitica
+            leads={leads}
+            totalAbsoluto={totalAbsoluto}
+            carregando={carregando}
+          />
+        )}
+
+        {moduloAtivo === MODULOS.ANALITICA_VENDAS && (
+          <AnaliticaVendas
             leads={leads}
             totalAbsoluto={totalAbsoluto}
             carregando={carregando}
