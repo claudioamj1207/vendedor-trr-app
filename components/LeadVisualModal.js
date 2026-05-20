@@ -108,8 +108,8 @@ function abrirRotaMaps(lead) {
 
 function Bloco({ titulo, children }) {
   return (
-    <section className="bg-zinc-900/70 border border-white/5 rounded-2xl p-4 md:p-5">
-      <h3 className="text-[11px] font-black uppercase tracking-widest text-blue-400 mb-4">
+    <section className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5">
+      <h3 className="text-[11px] font-black uppercase tracking-widest text-blue-700 mb-4">
         {titulo}
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -128,13 +128,13 @@ function LinhaInfo({ label, value, full = false, actions = null }) {
   return (
     <div className={full ? 'md:col-span-2' : ''}>
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
           {label}
         </p>
         {actions}
       </div>
 
-      <div className="bg-black/20 border border-white/5 rounded-xl px-3 py-3 text-[12px] text-white break-words min-h-[46px] flex items-center">
+      <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-[12px] text-slate-900 break-words min-h-[46px] flex items-center">
         {texto}
       </div>
     </div>
@@ -239,32 +239,32 @@ export default function LeadVisualModal({
   return (
     <div className="fixed inset-0 z-[9999]">
       <div
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-900/45 backdrop-blur-sm"
         onClick={handleClose}
       />
 
       <div className="absolute inset-0 flex items-center justify-center p-4 md:p-6">
-        <div className="w-full max-w-6xl max-h-[94vh] overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl">
-          <div className="sticky top-0 z-10 bg-zinc-950/95 backdrop-blur border-b border-white/5 px-5 py-4">
+        <div className="w-full max-w-6xl max-h-[94vh] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+          <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-200 px-5 py-4">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 mb-2">
                   Painel do Lead
                 </p>
 
-                <h2 className="text-lg md:text-2xl font-black uppercase text-white leading-tight break-words">
+                <h2 className="text-lg md:text-2xl font-black uppercase text-slate-900 leading-tight break-words">
                   {lead.razao_social || 'Sem razão social'}
                 </h2>
 
                 <div className="flex flex-wrap gap-2 mt-3">
-                  <span className="text-[10px] bg-blue-900/20 px-3 py-1 rounded-full text-blue-300 font-black border border-blue-500/10">
+                  <span className="text-[10px] bg-blue-50 px-3 py-1 rounded-full text-blue-700 font-black border border-blue-200">
                     {formatarCNPJ(lead.cnpj)}
                   </span>
 
                   <button
                     type="button"
                     onClick={() => copiarTexto(cnpjLimpo)}
-                    className="text-[10px] bg-blue-900/20 px-3 py-1 rounded-full text-blue-300 font-black border border-blue-500/10 hover:bg-blue-800/30"
+                    className="text-[10px] bg-blue-50 px-3 py-1 rounded-full text-blue-700 font-black border border-blue-200 hover:bg-blue-100"
                   >
                     Copiar CNPJ
                   </button>
@@ -272,7 +272,7 @@ export default function LeadVisualModal({
                   <button
                     type="button"
                     onClick={() => abrirRotaWaze(lead)}
-                    className="text-[10px] bg-emerald-900/20 px-3 py-1 rounded-full text-emerald-300 font-black border border-emerald-500/10 hover:bg-emerald-800/30"
+                    className="text-[10px] bg-emerald-50 px-3 py-1 rounded-full text-emerald-700 font-black border border-emerald-200 hover:bg-emerald-100"
                   >
                     Waze
                   </button>
@@ -280,16 +280,16 @@ export default function LeadVisualModal({
                   <button
                     type="button"
                     onClick={() => abrirRotaMaps(lead)}
-                    className="text-[10px] bg-cyan-900/20 px-3 py-1 rounded-full text-cyan-300 font-black border border-cyan-500/10 hover:bg-cyan-800/30"
+                    className="text-[10px] bg-cyan-50 px-3 py-1 rounded-full text-cyan-700 font-black border border-cyan-200 hover:bg-cyan-800/30"
                   >
                     Maps
                   </button>
 
-                  <span className="text-[10px] bg-zinc-800 px-3 py-1 rounded-full text-zinc-300 font-black border border-white/5 uppercase">
+                  <span className="text-[10px] bg-slate-100 px-3 py-1 rounded-full text-slate-700 font-black border border-slate-200 uppercase">
                     {lead.status_lead || 'Sem status'}
                   </span>
 
-                  <span className="text-[10px] bg-violet-900/20 px-3 py-1 rounded-full text-violet-300 font-black border border-violet-500/10 uppercase">
+                  <span className="text-[10px] bg-violet-50 px-3 py-1 rounded-full text-violet-700 font-black border border-violet-200 uppercase">
                     {lead.status_vendedor || 'Sem status vendedor'}
                   </span>
                 </div>
@@ -316,7 +316,7 @@ export default function LeadVisualModal({
                   <button
                     type="button"
                     onClick={() => copiarTexto(cnpjLimpo)}
-                    className="text-[9px] px-2 py-1 rounded-md bg-blue-900/20 text-blue-300 font-black border border-blue-500/10 hover:bg-blue-800/30"
+                    className="text-[9px] px-2 py-1 rounded-md bg-blue-50 text-blue-700 font-black border border-blue-200 hover:bg-blue-100"
                   >
                     Copiar
                   </button>
@@ -343,14 +343,14 @@ export default function LeadVisualModal({
                     <button
                       type="button"
                       onClick={() => abrirRotaWaze(lead)}
-                      className="text-[9px] px-2 py-1 rounded-md bg-emerald-900/20 text-emerald-300 font-black border border-emerald-500/10 hover:bg-emerald-800/30"
+                      className="text-[9px] px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 font-black border border-emerald-200 hover:bg-emerald-100"
                     >
                       Waze
                     </button>
                     <button
                       type="button"
                       onClick={() => abrirRotaMaps(lead)}
-                      className="text-[9px] px-2 py-1 rounded-md bg-cyan-900/20 text-cyan-300 font-black border border-cyan-500/10 hover:bg-cyan-800/30"
+                      className="text-[9px] px-2 py-1 rounded-md bg-cyan-50 text-cyan-700 font-black border border-cyan-200 hover:bg-cyan-800/30"
                     >
                       Maps
                     </button>
@@ -420,7 +420,7 @@ export default function LeadVisualModal({
               <button
                 type="button"
                 onClick={handleClose}
-                className="h-11 px-5 rounded-xl bg-zinc-800 border border-white/10 text-white text-[11px] font-black uppercase tracking-wide hover:bg-zinc-700 active:scale-95 transition-all"
+                className="h-11 px-5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-black uppercase tracking-wide hover:bg-slate-200 active:scale-95 transition-all"
               >
                 Sair
               </button>
