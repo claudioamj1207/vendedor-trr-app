@@ -16,7 +16,7 @@ function montarEstadoInicial(lead) {
 function Campo({ label, name, value, onChange, placeholder = '' }) {
   return (
     <div>
-      <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
         {label}
       </p>
       <input
@@ -24,7 +24,7 @@ function Campo({ label, name, value, onChange, placeholder = '' }) {
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-[12px] text-white outline-none"
+        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-3 text-[12px] text-slate-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
       />
     </div>
   );
@@ -81,19 +81,19 @@ export default function IncrementarLeadModal({
   return (
     <div className="fixed inset-0 z-[9999]">
       <div
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-900/45 backdrop-blur-sm"
         onClick={onClose}
       />
 
       <div className="absolute inset-0 flex items-center justify-center p-4 md:p-6">
-        <div className="w-full max-w-3xl max-h-[94vh] overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl">
-          <div className="sticky top-0 z-10 bg-zinc-950/95 backdrop-blur border-b border-white/5 px-5 py-4">
+        <div className="w-full max-w-3xl max-h-[94vh] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+          <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-200 px-5 py-4">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 mb-2">
                   Incrementar Lead
                 </p>
-                <h2 className="text-lg md:text-2xl font-black uppercase text-white leading-tight break-words">
+                <h2 className="text-lg md:text-2xl font-black uppercase text-slate-900 leading-tight break-words">
                   {titulo}
                 </h2>
               </div>
@@ -148,26 +148,26 @@ export default function IncrementarLeadModal({
               </div>
 
               <div className="md:col-span-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
                   Endereço de obra
                 </p>
                 <textarea
                   name="endereco_obra"
                   value={form.endereco_obra}
                   onChange={handleChange}
-                  className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-[12px] text-white outline-none min-h-[96px]"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-3 text-[12px] text-slate-900 outline-none min-h-[96px] focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
                   Observações
                 </p>
                 <textarea
                   name="observacoes"
                   value={form.observacoes}
                   onChange={handleChange}
-                  className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-[12px] text-white outline-none min-h-[140px]"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-3 text-[12px] text-slate-900 outline-none min-h-[140px] focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                 />
               </div>
             </div>
@@ -177,7 +177,7 @@ export default function IncrementarLeadModal({
                 type="button"
                 onClick={onClose}
                 disabled={salvando}
-                className="h-11 px-5 rounded-xl bg-zinc-800 border border-white/10 text-white text-[11px] font-black uppercase tracking-wide hover:bg-zinc-700 disabled:opacity-50"
+                className="h-11 px-5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-black uppercase tracking-wide hover:bg-slate-200 disabled:opacity-50"
               >
                 Cancelar
               </button>
