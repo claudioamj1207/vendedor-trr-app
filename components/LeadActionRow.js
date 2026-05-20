@@ -64,15 +64,15 @@ export default function LeadActionRow({
   }
 
   return (
-    <div className="px-4 py-3 border-b border-zinc-800/60 hover:bg-zinc-900/60 transition-colors">
+    <div className="px-4 py-3 border-b border-slate-200 bg-white hover:bg-slate-50 transition-colors">
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <h3 className="text-[12px] md:text-[13px] font-black uppercase text-white truncate tracking-wide">
+          <h3 className="text-[12px] md:text-[13px] font-black uppercase text-slate-900 truncate tracking-wide">
             {lead?.razao_social || 'SEM RAZÃO SOCIAL'}
           </h3>
 
           <div className="flex flex-wrap items-center gap-2 mt-1.5">
-            <span className="text-[10px] font-black text-blue-400">
+            <span className="text-[10px] font-black text-blue-700">
               {cnpjFormatado}
             </span>
 
@@ -80,32 +80,32 @@ export default function LeadActionRow({
               type="button"
               onClick={() => copiarTexto(cnpjLimpo)}
               title="Copiar CNPJ"
-              className="px-2.5 py-1 text-[9px] rounded-lg bg-blue-900/20 text-blue-300 font-black border border-blue-500/15 hover:bg-blue-800/30 transition-colors"
+              className="px-2.5 py-1 text-[9px] rounded-lg bg-blue-50 text-blue-700 font-black border border-blue-200 hover:bg-blue-100 transition-colors"
             >
               COPIAR
             </button>
 
-            <span className="text-[10px] text-zinc-400 uppercase">
+            <span className="text-[10px] text-slate-600 uppercase">
               {lead?.bairro || 'SEM BAIRRO'}
             </span>
 
-            <span className="text-[10px] text-zinc-500 uppercase">
+            <span className="text-[10px] text-slate-500 uppercase">
               {lead?.municipio || 'SEM MUNICÍPIO'}
               {lead?.uf ? ` - ${lead.uf}` : ''}
             </span>
 
-            <span className="text-[10px] text-zinc-500 truncate max-w-[260px]">
+            <span className="text-[10px] text-slate-500 truncate max-w-[260px]">
               {lead?.cnae_principal_descricao || 'SEM CNAE'}
             </span>
 
             {lead?.status_vendedor && (
-              <span className="px-2.5 py-1 text-[9px] rounded-lg bg-violet-900/20 text-violet-300 font-black border border-violet-500/15 uppercase">
+              <span className="px-2.5 py-1 text-[9px] rounded-lg bg-violet-50 text-violet-700 font-black border border-violet-200 uppercase">
                 {lead.status_vendedor}
               </span>
             )}
 
             {lead?.situacao_cadastral && (
-              <span className="px-2.5 py-1 text-[9px] rounded-lg bg-emerald-900/20 text-emerald-300 font-black border border-emerald-500/15 uppercase">
+              <span className="px-2.5 py-1 text-[9px] rounded-lg bg-emerald-50 text-emerald-700 font-black border border-emerald-200 uppercase">
                 {lead.situacao_cadastral}
               </span>
             )}
@@ -117,7 +117,7 @@ export default function LeadActionRow({
             type="button"
             onClick={handleEnviarParaMeuToDo}
             title="Enviar para Meu To Do"
-            className="px-3 py-1.5 text-[10px] rounded-lg font-black uppercase tracking-wide bg-violet-700 text-white hover:bg-violet-600 active:scale-95 transition-all shadow-sm"
+            className="px-3 py-1.5 text-[10px] rounded-lg font-black uppercase tracking-wide bg-violet-600 text-white hover:bg-violet-500 active:scale-95 transition-all shadow-sm"
           >
             MEU TO DO
           </button>
@@ -126,7 +126,7 @@ export default function LeadActionRow({
             type="button"
             onClick={() => abrirRota(lead)}
             title="Abrir rota"
-            className="px-3 py-1.5 text-[10px] rounded-lg font-black uppercase tracking-wide bg-emerald-700 text-white hover:bg-emerald-600 active:scale-95 transition-all shadow-sm"
+            className="px-3 py-1.5 text-[10px] rounded-lg font-black uppercase tracking-wide bg-emerald-600 text-white hover:bg-emerald-500 active:scale-95 transition-all shadow-sm"
           >
             ROTA
           </button>
