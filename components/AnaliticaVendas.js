@@ -377,4 +377,3 @@ export default function AnaliticaVendas({ leads = [], totalAbsoluto = 0, carrega
     </section>
   );
 }
-
