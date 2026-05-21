@@ -739,7 +739,7 @@ export default function VendedorTRR_Master() {
     } finally {
       setCarregando(false);
     }
-  }, [aba, moduloAtivo]);
+  }, [aba, moduloAtivo, aplicarOrdenacaoQuery]);
 
   useEffect(() => {
     sincronizar();
@@ -801,7 +801,7 @@ export default function VendedorTRR_Master() {
 
   useEffect(() => {
     setPaginaAtual(1);
-  }, [buscaDebounced, filtrosAtivos, aba, moduloAtivo]);
+  }, [buscaDebounced, filtrosAtivos, aba, moduloAtivo, ordenacaoLeads]);
 
   useEffect(() => {
     if (paginaAtual > totalPaginas) {
