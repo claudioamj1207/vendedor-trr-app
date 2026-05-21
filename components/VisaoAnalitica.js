@@ -1,286 +1,206 @@
 "use client";
 import React, { useMemo, useState, useEffect } from 'react';
 
-const CAMPOS_ANALISE = [
+const CAMPOS = [
   { id: 'cnae_principal_descricao', label: 'CNAE', curto: 'CNAE' },
   { id: 'municipio', label: 'Município', curto: 'Município' },
   { id: 'bairro', label: 'Bairro', curto: 'Bairro' },
   { id: 'porte', label: 'Porte', curto: 'Porte' },
-  { id: 'fonte_lead', label: 'Fonte do lead', curto: 'Fonte' },
-  { id: 'status_lead', label: 'Status do lead', curto: 'Status' },
-  { id: 'status_vendedor', label: 'Status do vendedor', curto: 'Status vendedor' },
-  { id: 'situacao_cadastral', label: 'Situação cadastral', curto: 'Situação' },
   { id: 'uf', label: 'UF', curto: 'UF' },
-  { id: 'potencial_consumo', label: 'Potencial de consumo', curto: 'Potencial' },
-  { id: 'categoria_trr', label: 'Categoria TRR', curto: 'Categoria' }
+  { id: 'fonte_lead', label: 'Fonte do Lead', curto: 'Fonte' },
+  { id: 'status_lead', label: 'Status do Lead', curto: 'Status' },
+  { id: 'status_vendedor', label: 'Status do Vendedor', curto: 'Status Vend.' },
+  { id: 'situacao_cadastral', label: 'Situação Cadastral', curto: 'Situação' },
+  { id: 'categoria_trr', label: 'Categoria TRR', curto: 'Categoria' },
+  { id: 'potencial_consumo', label: 'Potencial Consumo', curto: 'Potencial' }
 ];
 
-const STORAGE_KEY = 'vtrr_visao_analitica_camadas_salvas_v1';
+const campoLabel = (id) => CAMPOS.find((c) => c.id === id)?.label || id;
+const numeroBR = (valor) => Number(valor || 0).toLocaleString('pt-BR');
+const moedaBR = (valor) => Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const percentual = (parte, total) => (!total ? 0 : Math.round((parte / total) * 100));
 
-function texto(valor, fallback = 'Não informado') {
+const texto = (valor, fallback = 'Não informado') => {
   const limpo = String(valor ?? '').trim();
   if (!limpo || limpo.toLowerCase() === 'null' || limpo.toLowerCase() === 'undefined') return fallback;
   return limpo;
-}
+};
 
-function numeroBR(valor) {
-  return Number(valor || 0).toLocaleString('pt-BR');
-}
+const capitalLead = (lead) => Number(lead?.capital_social || 0);
 
-function moedaBR(valor) {
-  const numero = Number(valor || 0);
-  return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
-}
-
-function percentual(parte, total) {
-  if (!total) return 0;
-  return Math.round((Number(parte || 0) / Number(total || 1)) * 100);
-}
-
-function nomeCampo(campo) {
-  return CAMPOS_ANALISE.find((item) => item.id === campo)?.label || campo;
-}
-
-function obterValor(lead, campo) {
-  if (!campo) return 'Não informado';
-  const valor = lead?.[campo];
-  if (campo === 'uf') return texto(valor, 'Sem UF').toUpperCase();
-  return texto(valor);
-}
-
-function scoreLead(lead) {
+const scoreLead = (lead) => {
   let pontos = 0;
-  const capital = Number(lead?.capital_social || 0);
-  const cnae = texto(lead?.cnae_principal_descricao, '').toLowerCase();
-  const cnaeSec = texto(lead?.cnae_secundario, '').toLowerCase();
-  const base = `${cnae} ${cnaeSec} ${texto(lead?.razao_social, '').toLowerCase()} ${texto(lead?.nome_fantasia, '').toLowerCase()}`;
-
-  if (texto(lead?.situacao_cadastral, '').toUpperCase().includes('ATIVA')) pontos += 20;
-  if (capital >= 1000000) pontos += 25;
-  else if (capital >= 300000) pontos += 15;
+  const base = `${texto(lead?.cnae_principal_descricao, '')} ${texto(lead?.cnae_secundario, '')} ${texto(lead?.razao_social, '')}`.toLowerCase();
+  if (base.includes('transporte') || base.includes('carga') || base.includes('logística') || base.includes('logistica')) pontos += 30;
+  if (base.includes('constru') || base.includes('obra') || base.includes('engenharia') || base.includes('terraplenagem')) pontos += 30;
+  if (base.includes('indústria') || base.includes('industria') || base.includes('fabricação') || base.includes('fabricacao')) pontos += 24;
+  if (base.includes('energia') || base.includes('gerador') || base.includes('refrigeração') || base.includes('refrigeracao')) pontos += 22;
+  if (base.includes('agro') || base.includes('pesca') || base.includes('alimento') || base.includes('pecuária') || base.includes('pecuaria')) pontos += 22;
+  const capital = capitalLead(lead);
+  if (capital >= 1000000) pontos += 22;
+  else if (capital >= 300000) pontos += 14;
   else if (capital >= 100000) pontos += 8;
-  if (texto(lead?.municipio, '').toLowerCase().includes('manaus')) pontos += 8;
-  if (['AM', 'RR'].includes(texto(lead?.uf, '').toUpperCase())) pontos += 8;
-  if (lead?.telefone_1 || lead?.telefone_2) pontos += 5;
-  if (lead?.email) pontos += 3;
-
-  const termosQuentes = [
-    'transporte', 'carga', 'logística', 'logistica', 'construção', 'construcao', 'obras',
-    'terraplenagem', 'pavimentação', 'pavimentacao', 'fabricação', 'fabricacao', 'indústria',
-    'industria', 'energia', 'gerador', 'agro', 'pesca', 'alimentos', 'atacadista', 'distribuição', 'distribuicao'
-  ];
-  if (termosQuentes.some((termo) => base.includes(termo))) pontos += 14;
+  if (texto(lead?.situacao_cadastral, '').toUpperCase() === 'ATIVA') pontos += 10;
+  if (texto(lead?.municipio, '').toLowerCase().includes('manaus')) pontos += 4;
   return pontos;
-}
+};
 
-function agrupar(leads, campo, limite = 12) {
+const agruparPor = (leads, campo, limite = 10) => {
   const mapa = new Map();
-  leads.forEach((lead) => {
-    const nome = obterValor(lead, campo);
+  (leads || []).forEach((lead) => {
+    const nome = texto(lead?.[campo]);
     const atual = mapa.get(nome) || { nome, total: 0, capital: 0, score: 0, exemplos: [], leads: [] };
     atual.total += 1;
-    atual.capital += Number(lead?.capital_social || 0);
+    atual.capital += capitalLead(lead);
     atual.score += scoreLead(lead);
-    if (atual.exemplos.length < 4) atual.exemplos.push(texto(lead?.razao_social));
-    if (atual.leads.length < 20) atual.leads.push(lead);
+    if (atual.exemplos.length < 3) atual.exemplos.push(texto(lead?.razao_social));
+    if (atual.leads.length < 40) atual.leads.push(lead);
     mapa.set(nome, atual);
   });
   return Array.from(mapa.values())
     .sort((a, b) => b.total - a.total || b.score - a.score || b.capital - a.capital || a.nome.localeCompare(b.nome, 'pt-BR'))
     .slice(0, limite);
-}
+};
 
-function cruzar(leads, campoA, campoB, limite = 14) {
+const cruzar = (leads, campoA, campoB, limite = 14) => {
   const mapa = new Map();
-  leads.forEach((lead) => {
-    const a = obterValor(lead, campoA);
-    const b = obterValor(lead, campoB);
+  (leads || []).forEach((lead) => {
+    const a = texto(lead?.[campoA]);
+    const b = texto(lead?.[campoB]);
     const chave = `${a}|||${b}`;
-    const atual = mapa.get(chave) || { nome: a, subnome: b, total: 0, capital: 0, score: 0, exemplos: [] };
+    const atual = mapa.get(chave) || { nome: `${a} → ${b}`, a, b, total: 0, capital: 0, score: 0, exemplos: [], leads: [] };
     atual.total += 1;
-    atual.capital += Number(lead?.capital_social || 0);
+    atual.capital += capitalLead(lead);
     atual.score += scoreLead(lead);
     if (atual.exemplos.length < 3) atual.exemplos.push(texto(lead?.razao_social));
+    if (atual.leads.length < 40) atual.leads.push(lead);
     mapa.set(chave, atual);
   });
   return Array.from(mapa.values())
     .sort((a, b) => b.total - a.total || b.score - a.score || b.capital - a.capital)
     .slice(0, limite);
-}
+};
 
-function triplaCamada(leads, campoA, campoB, campoC, limite = 16) {
-  const mapa = new Map();
-  leads.forEach((lead) => {
-    const a = obterValor(lead, campoA);
-    const b = obterValor(lead, campoB);
-    const c = obterValor(lead, campoC);
-    const chave = `${a}|||${b}|||${c}`;
-    const atual = mapa.get(chave) || { nome: a, subnome: b, detalhe: c, total: 0, capital: 0, score: 0, exemplos: [] };
-    atual.total += 1;
-    atual.capital += Number(lead?.capital_social || 0);
-    atual.score += scoreLead(lead);
-    if (atual.exemplos.length < 3) atual.exemplos.push(texto(lead?.razao_social));
-    mapa.set(chave, atual);
-  });
-  return Array.from(mapa.values())
-    .sort((a, b) => b.total - a.total || b.score - a.score || b.capital - a.capital)
+const topLeads = (leads, limite = 12) => {
+  return [...(leads || [])]
+    .map((lead) => ({ ...lead, scoreAnalitico: scoreLead(lead) }))
+    .sort((a, b) => b.scoreAnalitico - a.scoreAnalitico || capitalLead(b) - capitalLead(a))
     .slice(0, limite);
-}
+};
 
-function baixarJson(nome, conteudo) {
-  const blob = new Blob([JSON.stringify(conteudo, null, 2)], { type: 'application/json;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = nome;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-function Botao({ children, onClick, variante = 'padrao', type = 'button' }) {
-  const estilos = {
-    padrao: 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50',
-    azul: 'bg-blue-600 border-blue-600 text-white hover:bg-blue-700',
-    verde: 'bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700',
-    roxo: 'bg-violet-600 border-violet-600 text-white hover:bg-violet-700',
-    vermelho: 'bg-red-600 border-red-600 text-white hover:bg-red-700'
-  };
-  return (
-    <button type={type} onClick={onClick} className={`px-4 py-2 rounded-2xl border text-[11px] font-black uppercase tracking-wide transition-all active:scale-95 shadow-sm ${estilos[variante] || estilos.padrao}`}>
-      {children}
-    </button>
-  );
-}
-
-function CardKPI({ titulo, valor, subtitulo, cor = 'blue' }) {
-  const estilos = {
-    blue: 'from-blue-50 to-white border-blue-100 text-blue-700',
-    emerald: 'from-emerald-50 to-white border-emerald-100 text-emerald-700',
-    violet: 'from-violet-50 to-white border-violet-100 text-violet-700',
-    amber: 'from-amber-50 to-white border-amber-100 text-amber-700',
-    rose: 'from-rose-50 to-white border-rose-100 text-rose-700'
-  };
-  return (
-    <div className={`rounded-3xl border bg-gradient-to-br p-5 shadow-sm ${estilos[cor] || estilos.blue}`}>
-      <p className="text-[10px] font-black uppercase tracking-widest opacity-75">{titulo}</p>
-      <p className="text-3xl font-black tracking-tighter mt-2 text-slate-950">{valor}</p>
-      {subtitulo && <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">{subtitulo}</p>}
-    </div>
-  );
-}
-
-function Barra({ valor, total, cor = 'bg-blue-500' }) {
+const MiniBarra = ({ valor, total }) => {
   const pct = percentual(valor, total);
   return (
-    <div className="h-2 bg-slate-100 rounded-full overflow-hidden mt-2">
-      <div className={`h-full ${cor}`} style={{ width: `${Math.min(100, pct)}%` }} />
+    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1.5">
+      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, pct)}%` }} />
     </div>
   );
-}
+};
 
-function RankingCompacto({ itens, total, tipo = 'simples' }) {
-  return (
-    <div className="space-y-2">
-      {itens.map((item, index) => (
-        <div key={`${item.nome}-${item.subnome || ''}-${item.detalhe || ''}-${index}`} className="bg-white border border-slate-100 rounded-2xl p-3 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[11px] font-black text-slate-900 leading-snug truncate">
-                {index + 1}. {item.nome}
-              </p>
-              {item.subnome && <p className="text-[10px] text-blue-600 font-bold mt-1 truncate">{item.subnome}</p>}
-              {item.detalhe && <p className="text-[10px] text-violet-600 font-bold mt-1 truncate">{item.detalhe}</p>}
-              <p className="text-[10px] text-slate-400 mt-1 truncate">{item.exemplos?.join(' • ')}</p>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="text-lg font-black text-slate-950">{numeroBR(item.total)}</p>
-              <p className="text-[9px] text-slate-400 uppercase">{percentual(item.total, total)}%</p>
-            </div>
+const RankingCompacto = ({ itens, total, max = 6 }) => (
+  <div className="space-y-1.5">
+    {itens.slice(0, max).map((item, index) => (
+      <div key={`${item.nome}-${index}`} className="rounded-xl border border-slate-100 bg-slate-50/70 px-2.5 py-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black text-slate-800 truncate leading-tight">{index + 1}. {item.nome}</p>
+            <p className="text-[9px] text-slate-400 truncate mt-0.5">{item.exemplos?.join(' • ')}</p>
           </div>
-          <Barra valor={item.total} total={total} cor={tipo === 'cruzado' ? 'bg-violet-500' : tipo === 'triplo' ? 'bg-emerald-500' : 'bg-blue-500'} />
+          <div className="text-right shrink-0">
+            <p className="text-[12px] font-black text-slate-900">{numeroBR(item.total)}</p>
+            <p className="text-[8px] text-slate-400 font-black">{percentual(item.total, total)}%</p>
+          </div>
         </div>
-      ))}
-    </div>
-  );
-}
+        <MiniBarra valor={item.total} total={total} />
+      </div>
+    ))}
+  </div>
+);
 
-function Quadrante({ titulo, subtitulo, children, onZoom, destaque = 'blue' }) {
+const CardKpi = ({ titulo, valor, detalhe, cor = 'blue' }) => {
   const cores = {
-    blue: 'border-blue-100 bg-blue-50/40',
-    emerald: 'border-emerald-100 bg-emerald-50/40',
-    violet: 'border-violet-100 bg-violet-50/40',
-    amber: 'border-amber-100 bg-amber-50/40',
-    rose: 'border-rose-100 bg-rose-50/40',
-    slate: 'border-slate-100 bg-white'
+    blue: 'from-blue-500 to-cyan-500',
+    emerald: 'from-emerald-500 to-teal-500',
+    violet: 'from-violet-500 to-fuchsia-500',
+    amber: 'from-amber-400 to-orange-500',
+    rose: 'from-rose-500 to-red-500'
   };
   return (
-    <section className={`rounded-3xl border shadow-sm p-4 min-h-[310px] ${cores[destaque] || cores.slate}`}>
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-black uppercase tracking-tight text-slate-950 truncate">{titulo}</h3>
-          {subtitulo && <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{subtitulo}</p>}
-        </div>
-        <button onClick={onZoom} className="shrink-0 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-[10px] font-black text-slate-700 hover:bg-slate-50 shadow-sm">
-          ZOOM
-        </button>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function ModalZoom({ aberto, onClose, titulo, subtitulo, children, onPrint }) {
-  useEffect(() => {
-    if (!aberto) return;
-    const onKey = (event) => { if (event.key === 'Escape') onClose?.(); };
-    document.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = 'auto';
-    };
-  }, [aberto, onClose]);
-
-  if (!aberto) return null;
-  return (
-    <div className="fixed inset-0 z-[9999]">
-      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="absolute inset-0 flex items-center justify-center p-4 md:p-6">
-        <div className="w-full max-w-6xl max-h-[94vh] overflow-hidden rounded-3xl bg-white border border-slate-200 shadow-2xl">
-          <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-200 px-5 py-4 flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-blue-600">Zoom analítico</p>
-              <h2 className="text-xl md:text-3xl font-black uppercase tracking-tight text-slate-950 mt-1">{titulo}</h2>
-              {subtitulo && <p className="text-sm text-slate-500 mt-2">{subtitulo}</p>}
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <Botao onClick={onPrint} variante="azul">Imprimir</Botao>
-              <Botao onClick={onClose} variante="vermelho">Fechar</Botao>
-            </div>
-          </div>
-          <div className="overflow-y-auto max-h-[calc(94vh-104px)] p-5 bg-slate-50">
-            {children}
-          </div>
-        </div>
-      </div>
+    <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-3 overflow-hidden relative min-h-[82px]">
+      <div className={`absolute right-0 top-0 w-20 h-20 bg-gradient-to-br ${cores[cor] || cores.blue} opacity-10 rounded-bl-[36px]`} />
+      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 relative">{titulo}</p>
+      <p className="text-xl font-black text-slate-900 tracking-tight mt-1 relative">{valor}</p>
+      <p className="text-[9px] text-slate-500 mt-1 relative leading-snug">{detalhe}</p>
     </div>
   );
-}
+};
 
-function SelectCamada({ label, value, onChange, desabilitar = [] }) {
-  return (
-    <div>
-      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-2">{label}</label>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-200 shadow-sm">
-        {CAMPOS_ANALISE.map((campo) => (
-          <option key={campo.id} value={campo.id} disabled={desabilitar.includes(campo.id)}>{campo.label}</option>
+const Quadrante = ({ titulo, subtitulo, children, onZoom, badge }) => (
+  <button
+    type="button"
+    onClick={onZoom}
+    className="text-left rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all p-3 min-h-[250px] flex flex-col"
+  >
+    <div className="flex items-start justify-between gap-3 mb-2">
+      <div className="min-w-0">
+        <p className="text-[10px] font-black uppercase tracking-wide text-slate-900 truncate">{titulo}</p>
+        {subtitulo && <p className="text-[9px] text-slate-400 mt-0.5 truncate">{subtitulo}</p>}
+      </div>
+      <span className="shrink-0 rounded-full bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 text-[8px] font-black uppercase">
+        {badge || 'Zoom'}
+      </span>
+    </div>
+    <div className="flex-1 overflow-hidden">{children}</div>
+  </button>
+);
+
+const TabelaExpandida = ({ itens, total, tipo = 'ranking' }) => (
+  <div className="overflow-x-auto">
+    <table className="w-full text-left border-collapse">
+      <thead>
+        <tr className="text-[10px] uppercase tracking-widest text-slate-400 border-b border-slate-100">
+          <th className="py-2 pr-3">#</th>
+          <th className="py-2 pr-3">Grupo</th>
+          <th className="py-2 pr-3 text-right">Leads</th>
+          <th className="py-2 pr-3 text-right">%</th>
+          <th className="py-2 pr-3 text-right">Score</th>
+          <th className="py-2 pr-3 text-right">Capital</th>
+          <th className="py-2 pr-3">Exemplos</th>
+        </tr>
+      </thead>
+      <tbody>
+        {(itens || []).map((item, index) => (
+          <tr key={`${tipo}-${item.nome}-${index}`} className="border-b border-slate-100 text-[11px]">
+            <td className="py-2 pr-3 font-black text-slate-400">{index + 1}</td>
+            <td className="py-2 pr-3 font-black text-slate-900 min-w-[220px]">{item.nome}</td>
+            <td className="py-2 pr-3 text-right font-black text-slate-900">{numeroBR(item.total)}</td>
+            <td className="py-2 pr-3 text-right text-slate-500">{percentual(item.total, total)}%</td>
+            <td className="py-2 pr-3 text-right text-blue-700 font-black">{numeroBR(item.score)}</td>
+            <td className="py-2 pr-3 text-right text-emerald-700 font-black">{moedaBR(item.capital)}</td>
+            <td className="py-2 pr-3 text-slate-500 min-w-[280px]">{item.exemplos?.join(' • ')}</td>
+          </tr>
         ))}
-      </select>
-    </div>
-  );
-}
+      </tbody>
+    </table>
+  </div>
+);
+
+const ListaLeadsExpandida = ({ leads }) => (
+  <div className="space-y-2">
+    {(leads || []).map((lead, index) => (
+      <div key={`${lead.cnpj || lead.razao_social}-${index}`} className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-black text-slate-900 truncate">{index + 1}. {texto(lead.razao_social)}</p>
+          <p className="text-[10px] text-slate-500 truncate mt-1">{texto(lead.cnae_principal_descricao)} • {texto(lead.municipio)} / {texto(lead.uf, '')} • {texto(lead.porte)}</p>
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-sm font-black text-blue-700">{lead.scoreAnalitico}</p>
+          <p className="text-[8px] uppercase text-slate-400 font-black">score</p>
+        </div>
+      </div>
+    ))}
+  </div>
+);
 
 export default function VisaoAnalitica({ leads = [], totalAbsoluto = 0, carregando = false }) {
   const [camada1, setCamada1] = useState('cnae_principal_descricao');
@@ -291,249 +211,207 @@ export default function VisaoAnalitica({ leads = [], totalAbsoluto = 0, carregan
 
   useEffect(() => {
     try {
-      const bruto = localStorage.getItem(STORAGE_KEY);
-      if (bruto) setAnalisesSalvas(JSON.parse(bruto));
-    } catch {}
+      const salvas = JSON.parse(localStorage.getItem('vtrr_analises_salvas') || '[]');
+      setAnalisesSalvas(Array.isArray(salvas) ? salvas : []);
+    } catch {
+      setAnalisesSalvas([]);
+    }
   }, []);
 
   const dados = useMemo(() => {
     const total = leads.length;
-    const ativos = leads.filter((lead) => texto(lead.situacao_cadastral, '').toUpperCase().includes('ATIVA')).length;
-    const capitalSomado = leads.reduce((acc, lead) => acc + Number(lead.capital_social || 0), 0);
-    const camadaPrincipal = agrupar(leads, camada1, 14);
-    const cruzamento12 = cruzar(leads, camada1, camada2, 16);
-    const cruzamento23 = cruzar(leads, camada2, camada3, 16);
-    const triplo = triplaCamada(leads, camada1, camada2, camada3, 18);
-    const topOportunidades = [...leads]
-      .map((lead) => ({ ...lead, scoreAnalitico: scoreLead(lead) }))
-      .sort((a, b) => b.scoreAnalitico - a.scoreAnalitico || Number(b.capital_social || 0) - Number(a.capital_social || 0))
-      .slice(0, 14);
-    const gruposDistintos = new Set(leads.map((lead) => obterValor(lead, camada1))).size;
-    return { total, ativos, capitalSomado, camadaPrincipal, cruzamento12, cruzamento23, triplo, topOportunidades, gruposDistintos };
+    const capitalTotal = leads.reduce((acc, lead) => acc + capitalLead(lead), 0);
+    const ativos = leads.filter((lead) => texto(lead.situacao_cadastral, '').toUpperCase() === 'ATIVA').length;
+    const municipios = new Set(leads.map((lead) => texto(lead.municipio, '')).filter(Boolean)).size;
+    const cnaes = new Set(leads.map((lead) => texto(lead.cnae_principal_descricao, '')).filter(Boolean)).size;
+
+    const r1 = agruparPor(leads, camada1, 20);
+    const r2 = agruparPor(leads, camada2, 20);
+    const r3 = agruparPor(leads, camada3, 20);
+    const c12 = cruzar(leads, camada1, camada2, 24);
+    const c23 = cruzar(leads, camada2, camada3, 24);
+    const c13 = cruzar(leads, camada1, camada3, 24);
+    const oportunidades = topLeads(leads, 20);
+    const fontes = agruparPor(leads, 'fonte_lead', 12);
+    const status = agruparPor(leads, 'status_lead', 12);
+
+    return { total, capitalTotal, ativos, municipios, cnaes, r1, r2, r3, c12, c23, c13, oportunidades, fontes, status };
   }, [leads, camada1, camada2, camada3]);
 
-  const configuracaoAtual = useMemo(() => ({
-    camada1,
-    camada2,
-    camada3,
-    titulo: `${nomeCampo(camada1)} → ${nomeCampo(camada2)} → ${nomeCampo(camada3)}`,
-    criadoEm: new Date().toISOString()
-  }), [camada1, camada2, camada3]);
+  const nomeAnalise = `${campoLabel(camada1)} → ${campoLabel(camada2)} → ${campoLabel(camada3)}`;
 
-  function salvarAnalise() {
-    const nome = window.prompt('Nome para salvar esta análise:', configuracaoAtual.titulo);
-    if (!nome) return;
-    const nova = { ...configuracaoAtual, id: Date.now(), nome };
-    const atualizadas = [nova, ...analisesSalvas].slice(0, 12);
+  const salvarAnalise = () => {
+    const nova = {
+      id: Date.now(),
+      nome: nomeAnalise,
+      camada1,
+      camada2,
+      camada3,
+      criadoEm: new Date().toISOString()
+    };
+    const atualizadas = [nova, ...analisesSalvas.filter((item) => item.nome !== nova.nome)].slice(0, 8);
     setAnalisesSalvas(atualizadas);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(atualizadas));
-  }
+    localStorage.setItem('vtrr_analises_salvas', JSON.stringify(atualizadas));
+  };
 
-  function carregarAnalise(item) {
+  const carregarAnalise = (item) => {
     setCamada1(item.camada1);
     setCamada2(item.camada2);
     setCamada3(item.camada3);
-  }
+  };
 
-  function excluirAnalise(id) {
-    const atualizadas = analisesSalvas.filter((item) => item.id !== id);
-    setAnalisesSalvas(atualizadas);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(atualizadas));
-  }
+  const imprimirTela = () => window.print();
 
-  function imprimirTela() {
-    window.print();
-  }
-
-  function exportarConfiguracao() {
-    baixarJson(`analise-vtrr-${Date.now()}.json`, {
-      configuracao: configuracaoAtual,
-      resumo: {
-        total: dados.total,
-        ativos: dados.ativos,
-        capitalSomado: dados.capitalSomado,
-        gruposDistintos: dados.gruposDistintos
-      },
-      rankingCamadaPrincipal: dados.camadaPrincipal,
-      cruzamento12: dados.cruzamento12,
-      cruzamento23: dados.cruzamento23,
-      triplo: dados.triplo
-    });
-  }
+  const zooms = {
+    camada1: { titulo: `Ranking por ${campoLabel(camada1)}`, corpo: <TabelaExpandida itens={dados.r1} total={dados.total} tipo="camada1" /> },
+    camada2: { titulo: `Ranking por ${campoLabel(camada2)}`, corpo: <TabelaExpandida itens={dados.r2} total={dados.total} tipo="camada2" /> },
+    camada3: { titulo: `Ranking por ${campoLabel(camada3)}`, corpo: <TabelaExpandida itens={dados.r3} total={dados.total} tipo="camada3" /> },
+    c12: { titulo: `${campoLabel(camada1)} x ${campoLabel(camada2)}`, corpo: <TabelaExpandida itens={dados.c12} total={dados.total} tipo="c12" /> },
+    c23: { titulo: `${campoLabel(camada2)} x ${campoLabel(camada3)}`, corpo: <TabelaExpandida itens={dados.c23} total={dados.total} tipo="c23" /> },
+    c13: { titulo: `${campoLabel(camada1)} x ${campoLabel(camada3)}`, corpo: <TabelaExpandida itens={dados.c13} total={dados.total} tipo="c13" /> },
+    oportunidades: { titulo: 'Top oportunidades comerciais', corpo: <ListaLeadsExpandida leads={dados.oportunidades} /> },
+    fontes: { titulo: 'Fontes do banco', corpo: <TabelaExpandida itens={dados.fontes} total={dados.total} tipo="fontes" /> },
+    status: { titulo: 'Funil por status', corpo: <TabelaExpandida itens={dados.status} total={dados.total} tipo="status" /> }
+  };
 
   if (carregando) {
-    return <div className="text-center py-20 text-[11px] animate-pulse text-slate-400 font-black uppercase tracking-widest">Montando painel analítico...</div>;
+    return <div className="rounded-3xl bg-white border border-slate-100 p-10 text-center text-slate-400 text-[11px] font-black uppercase tracking-widest animate-pulse">Montando painel analítico...</div>;
   }
 
   if (!dados.total) {
-    return (
-      <div className="bg-white border border-slate-200 rounded-3xl p-8 text-center shadow-sm">
-        <p className="text-sm font-black uppercase text-slate-500">Nenhum lead carregado para análise.</p>
-      </div>
-    );
+    return <div className="rounded-3xl bg-white border border-slate-100 p-10 text-center text-slate-500 text-sm font-bold">Nenhum lead carregado para análise.</div>;
   }
 
-  const zoomConteudos = {
-    principal: {
-      titulo: `Ranking por ${nomeCampo(camada1)}`,
-      subtitulo: 'Camada principal escolhida para leitura do banco.',
-      conteudo: <RankingCompacto itens={dados.camadaPrincipal} total={dados.total} />
-    },
-    cruzamento12: {
-      titulo: `${nomeCampo(camada1)} x ${nomeCampo(camada2)}`,
-      subtitulo: 'Cruzamento entre a primeira e a segunda camada.',
-      conteudo: <RankingCompacto itens={dados.cruzamento12} total={dados.total} tipo="cruzado" />
-    },
-    cruzamento23: {
-      titulo: `${nomeCampo(camada2)} x ${nomeCampo(camada3)}`,
-      subtitulo: 'Cruzamento entre a segunda e a terceira camada.',
-      conteudo: <RankingCompacto itens={dados.cruzamento23} total={dados.total} tipo="cruzado" />
-    },
-    triplo: {
-      titulo: `${nomeCampo(camada1)} → ${nomeCampo(camada2)} → ${nomeCampo(camada3)}`,
-      subtitulo: 'Recortes combinando as três camadas selecionadas.',
-      conteudo: <RankingCompacto itens={dados.triplo} total={dados.total} tipo="triplo" />
-    },
-    oportunidades: {
-      titulo: 'Top oportunidades comerciais',
-      subtitulo: 'Ranking automático usando situação cadastral, capital, localização, contato e termos de atividade.',
-      conteudo: (
-        <div className="space-y-3">
-          {dados.topOportunidades.map((lead, index) => (
-            <div key={`${lead.cnpj || lead.razao_social}-${index}`} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-black text-slate-950 leading-snug">{index + 1}. {texto(lead.razao_social)}</p>
-                  <p className="text-[11px] text-blue-600 font-bold mt-1 truncate">{texto(lead.cnae_principal_descricao)}</p>
-                  <p className="text-[11px] text-slate-500 mt-1">{texto(lead.municipio)} / {texto(lead.uf, '')} • {texto(lead.porte)}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-2xl font-black text-emerald-600">{lead.scoreAnalitico}</p>
-                  <p className="text-[9px] uppercase text-slate-400 font-black">pontos</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )
-    },
-    resumo: {
-      titulo: 'Resumo executivo',
-      subtitulo: 'Leitura geral do painel atual.',
-      conteudo: (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <CardKPI titulo="Leads analisados" valor={numeroBR(dados.total)} subtitulo={`Banco total: ${numeroBR(totalAbsoluto || dados.total)}`} cor="blue" />
-          <CardKPI titulo="Ativos" valor={`${percentual(dados.ativos, dados.total)}%`} subtitulo={`${numeroBR(dados.ativos)} leads com situação ativa.`} cor="emerald" />
-          <CardKPI titulo="Grupos distintos" valor={numeroBR(dados.gruposDistintos)} subtitulo={`Distintos em ${nomeCampo(camada1)}.`} cor="violet" />
-          <CardKPI titulo="Capital social" valor={moedaBR(dados.capitalSomado)} subtitulo="Soma dos capitais informados." cor="amber" />
-        </div>
-      )
-    }
-  };
-
-  const zoomAtual = zoom ? zoomConteudos[zoom] : null;
-
   return (
-    <section className="space-y-5 print:bg-white">
-      <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
-        <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-5">
+    <section className="space-y-4 print:bg-white">
+      <style>{`
+        @media print {
+          body { background: white !important; }
+          .no-print { display: none !important; }
+          .print-card { break-inside: avoid; box-shadow: none !important; }
+        }
+      `}</style>
+
+      <div className="no-print rounded-3xl bg-white border border-slate-100 shadow-sm p-4">
+        <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-600">Central Analítica por Camadas</p>
-            <h2 className="text-2xl md:text-4xl font-black uppercase tracking-tight text-slate-950 mt-2">Monte o dashboard do seu jeito</h2>
-            <p className="text-sm text-slate-500 mt-2 max-w-3xl leading-relaxed">
-              Escolha até três camadas de análise. O VTRR monta um painel ocupado, com quadrantes, rankings, cruzamentos, zoom, impressão e análises salvas no navegador.
-            </p>
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-blue-600">Central Analítica por Camadas</p>
+            <h2 className="text-2xl md:text-3xl font-black tracking-tight text-slate-950 mt-1">Painel compacto com zoom</h2>
+            <p className="text-xs text-slate-500 mt-1">Tela principal cheia para leitura rápida. Clique em qualquer quadrante para ampliar, salvar ou imprimir.</p>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <Botao onClick={salvarAnalise} variante="verde">Salvar análise</Botao>
-            <Botao onClick={exportarConfiguracao} variante="roxo">Exportar JSON</Botao>
-            <Botao onClick={imprimirTela} variante="azul">Imprimir</Botao>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 flex-1 max-w-4xl">
+            {[{ label: 'Camada 1', value: camada1, set: setCamada1 }, { label: 'Camada 2', value: camada2, set: setCamada2 }, { label: 'Camada 3', value: camada3, set: setCamada3 }].map((ctrl) => (
+              <div key={ctrl.label}>
+                <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">{ctrl.label}</label>
+                <select
+                  value={ctrl.value}
+                  onChange={(e) => ctrl.set(e.target.value)}
+                  className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-[11px] font-bold px-3 outline-none"
+                >
+                  {CAMPOS.map((campo) => <option key={campo.id} value={campo.id}>{campo.label}</option>)}
+                </select>
+              </div>
+            ))}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
-          <SelectCamada label="Camada 1" value={camada1} onChange={setCamada1} />
-          <SelectCamada label="Camada 2" value={camada2} onChange={setCamada2} />
-          <SelectCamada label="Camada 3" value={camada3} onChange={setCamada3} />
-        </div>
+        <div className="mt-3 flex flex-wrap gap-2 items-center justify-between">
+          <div className="flex flex-wrap gap-2">
+            <button onClick={salvarAnalise} className="h-9 px-4 rounded-xl bg-blue-600 text-white text-[10px] font-black uppercase hover:bg-blue-500">Salvar análise</button>
+            <button onClick={imprimirTela} className="h-9 px-4 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase hover:bg-slate-700">Imprimir painel</button>
+          </div>
 
-        {analisesSalvas.length > 0 && (
-          <div className="mt-5 bg-slate-50 border border-slate-200 rounded-3xl p-4">
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Análises salvas</p>
-              <span className="text-[10px] text-slate-400 font-bold">{analisesSalvas.length} salvas</span>
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              {analisesSalvas.map((item) => (
-                <div key={item.id} className="flex items-center gap-1 bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
-                  <button onClick={() => carregarAnalise(item)} className="px-3 py-1.5 text-[10px] font-black text-slate-700 uppercase hover:text-blue-700">
-                    {item.nome}
-                  </button>
-                  <button onClick={() => excluirAnalise(item.id)} className="px-2 py-1.5 text-[10px] font-black text-red-500 hover:text-red-700">×</button>
-                </div>
+          {analisesSalvas.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 items-center">
+              <span className="text-[9px] font-black uppercase text-slate-400">Salvas:</span>
+              {analisesSalvas.slice(0, 5).map((item) => (
+                <button key={item.id} onClick={() => carregarAnalise(item)} className="px-2.5 py-1.5 rounded-full bg-slate-100 text-slate-700 text-[9px] font-black hover:bg-blue-50 hover:text-blue-700">
+                  {item.nome}
+                </button>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <CardKPI titulo="Leads analisados" valor={numeroBR(dados.total)} subtitulo={`Total no banco: ${numeroBR(totalAbsoluto || dados.total)}`} cor="blue" />
-        <CardKPI titulo="Ativos" valor={`${percentual(dados.ativos, dados.total)}%`} subtitulo={`${numeroBR(dados.ativos)} leads ativos.`} cor="emerald" />
-        <CardKPI titulo="Grupos da camada 1" valor={numeroBR(dados.gruposDistintos)} subtitulo={nomeCampo(camada1)} cor="violet" />
-        <CardKPI titulo="Capital social" valor={moedaBR(dados.capitalSomado)} subtitulo="Total informado nos leads." cor="amber" />
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+        <CardKpi titulo="Leads na análise" valor={numeroBR(dados.total)} detalhe={`Banco: ${numeroBR(totalAbsoluto || dados.total)}`} cor="blue" />
+        <CardKpi titulo="Ativos" valor={`${percentual(dados.ativos, dados.total)}%`} detalhe={`${numeroBR(dados.ativos)} CNPJs ativos`} cor="emerald" />
+        <CardKpi titulo="CNAEs distintos" valor={numeroBR(dados.cnaes)} detalhe="Variedade econômica" cor="violet" />
+        <CardKpi titulo="Municípios" valor={numeroBR(dados.municipios)} detalhe="Distribuição territorial" cor="amber" />
+        <CardKpi titulo="Capital somado" valor={moedaBR(dados.capitalTotal)} detalhe="Capital social informado" cor="rose" />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        <Quadrante titulo={`Camada 1: ${nomeCampo(camada1)}`} subtitulo="Ranking principal do painel." onZoom={() => setZoom('principal')} destaque="blue">
-          <RankingCompacto itens={dados.camadaPrincipal.slice(0, 6)} total={dados.total} />
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+        <Quadrante titulo={`1ª camada: ${campoLabel(camada1)}`} subtitulo={nomeAnalise} onZoom={() => setZoom('camada1')}>
+          <RankingCompacto itens={dados.r1} total={dados.total} />
         </Quadrante>
 
-        <Quadrante titulo={`${nomeCampo(camada1)} x ${nomeCampo(camada2)}`} subtitulo="Primeiro cruzamento analítico." onZoom={() => setZoom('cruzamento12')} destaque="violet">
-          <RankingCompacto itens={dados.cruzamento12.slice(0, 6)} total={dados.total} tipo="cruzado" />
+        <Quadrante titulo={`2ª camada: ${campoLabel(camada2)}`} subtitulo="Ranking secundário" onZoom={() => setZoom('camada2')}>
+          <RankingCompacto itens={dados.r2} total={dados.total} />
         </Quadrante>
 
-        <Quadrante titulo={`${nomeCampo(camada2)} x ${nomeCampo(camada3)}`} subtitulo="Segundo cruzamento analítico." onZoom={() => setZoom('cruzamento23')} destaque="emerald">
-          <RankingCompacto itens={dados.cruzamento23.slice(0, 6)} total={dados.total} tipo="cruzado" />
+        <Quadrante titulo={`3ª camada: ${campoLabel(camada3)}`} subtitulo="Detalhamento final" onZoom={() => setZoom('camada3')}>
+          <RankingCompacto itens={dados.r3} total={dados.total} />
         </Quadrante>
 
-        <Quadrante titulo="Recorte em 3 camadas" subtitulo={configuracaoAtual.titulo} onZoom={() => setZoom('triplo')} destaque="amber">
-          <RankingCompacto itens={dados.triplo.slice(0, 6)} total={dados.total} tipo="triplo" />
+        <Quadrante titulo={`${campoLabel(camada1)} x ${campoLabel(camada2)}`} subtitulo="Cruzamento principal" onZoom={() => setZoom('c12')} badge="Abrir">
+          <RankingCompacto itens={dados.c12} total={dados.total} />
         </Quadrante>
 
-        <Quadrante titulo="Top oportunidades" subtitulo="Ranking automático de potencial." onZoom={() => setZoom('oportunidades')} destaque="rose">
-          <div className="space-y-2">
-            {dados.topOportunidades.slice(0, 6).map((lead, index) => (
-              <div key={`${lead.cnpj || lead.razao_social}-${index}`} className="bg-white border border-slate-100 rounded-2xl p-3 shadow-sm flex items-start justify-between gap-3">
+        <Quadrante titulo={`${campoLabel(camada2)} x ${campoLabel(camada3)}`} subtitulo="Cruzamento operacional" onZoom={() => setZoom('c23')} badge="Abrir">
+          <RankingCompacto itens={dados.c23} total={dados.total} />
+        </Quadrante>
+
+        <Quadrante titulo={`${campoLabel(camada1)} x ${campoLabel(camada3)}`} subtitulo="Cruzamento estratégico" onZoom={() => setZoom('c13')} badge="Abrir">
+          <RankingCompacto itens={dados.c13} total={dados.total} />
+        </Quadrante>
+
+        <Quadrante titulo="Top oportunidades" subtitulo="Score comercial automático" onZoom={() => setZoom('oportunidades')} badge="Zoom">
+          <div className="space-y-1.5">
+            {dados.oportunidades.slice(0, 7).map((lead, index) => (
+              <div key={`${lead.cnpj}-${index}`} className="rounded-xl bg-emerald-50 border border-emerald-100 px-2.5 py-2 flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-black text-slate-950 truncate">{index + 1}. {texto(lead.razao_social)}</p>
-                  <p className="text-[10px] text-slate-500 truncate mt-1">{texto(lead.municipio)} / {texto(lead.uf, '')}</p>
+                  <p className="text-[10px] font-black text-slate-900 truncate">{index + 1}. {texto(lead.razao_social)}</p>
+                  <p className="text-[9px] text-slate-500 truncate mt-0.5">{texto(lead.municipio)} • {texto(lead.cnae_principal_descricao)}</p>
                 </div>
-                <span className="text-sm font-black text-emerald-600">{lead.scoreAnalitico}</span>
+                <span className="text-[11px] font-black text-emerald-700">{lead.scoreAnalitico}</span>
               </div>
             ))}
           </div>
         </Quadrante>
 
-        <Quadrante titulo="Resumo executivo" subtitulo="Números gerais do painel atual." onZoom={() => setZoom('resumo')} destaque="slate">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4"><p className="text-[10px] font-black text-blue-700 uppercase">Leads</p><p className="text-2xl font-black text-slate-950">{numeroBR(dados.total)}</p></div>
-            <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4"><p className="text-[10px] font-black text-emerald-700 uppercase">Ativos</p><p className="text-2xl font-black text-slate-950">{percentual(dados.ativos, dados.total)}%</p></div>
-            <div className="bg-violet-50 border border-violet-100 rounded-2xl p-4"><p className="text-[10px] font-black text-violet-700 uppercase">Grupos</p><p className="text-2xl font-black text-slate-950">{numeroBR(dados.gruposDistintos)}</p></div>
-            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4"><p className="text-[10px] font-black text-amber-700 uppercase">Capital</p><p className="text-lg font-black text-slate-950">{moedaBR(dados.capitalSomado)}</p></div>
+        <Quadrante titulo="Fontes e status" subtitulo="Origem e funil" onZoom={() => setZoom('fontes')} badge="Fontes">
+          <RankingCompacto itens={dados.fontes} total={dados.total} max={3} />
+          <div className="mt-2 pt-2 border-t border-slate-100">
+            <RankingCompacto itens={dados.status} total={dados.total} max={3} />
           </div>
         </Quadrante>
       </div>
 
-      <ModalZoom
-        aberto={!!zoomAtual}
-        onClose={() => setZoom(null)}
-        titulo={zoomAtual?.titulo}
-        subtitulo={zoomAtual?.subtitulo}
-        onPrint={imprimirTela}
-      >
-        {zoomAtual?.conteudo}
-      </ModalZoom>
+      {zoom && zooms[zoom] && (
+        <div className="fixed inset-0 z-[9999] no-print">
+          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setZoom(null)} />
+          <div className="absolute inset-0 flex items-center justify-center p-4 md:p-6">
+            <div className="w-full max-w-6xl max-h-[92vh] overflow-hidden rounded-3xl bg-white border border-slate-200 shadow-2xl">
+              <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-100 px-5 py-4 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-blue-600">Zoom analítico</p>
+                  <h3 className="text-xl font-black text-slate-950 tracking-tight mt-1">{zooms[zoom].titulo}</h3>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => window.print()} className="h-10 px-4 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase">Imprimir</button>
+                  <button onClick={() => setZoom(null)} className="h-10 px-4 rounded-xl bg-red-600 text-white text-[10px] font-black uppercase">Fechar</button>
+                </div>
+              </div>
+              <div className="overflow-y-auto max-h-[calc(92vh-82px)] p-5">
+                {zooms[zoom].corpo}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
