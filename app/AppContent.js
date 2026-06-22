@@ -332,7 +332,7 @@ const montarHtmlCadastroLead = (lead) => {
     </head>
     <body>
       <h1>Ficha de Cadastro</h1>
-      <p class="sub">Vendedor TRR</p>
+      <p class="sub">VTRR Mobile</p>
       <table>
         <tbody>
           ${linhas
@@ -931,7 +931,7 @@ export default function VendedorTRR_Master() {
 
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(10);
-          doc.text('Vendedor TRR', 20, 27);
+          doc.text('VTRR Mobile', 20, 27);
 
           let y = 38;
 
@@ -1591,22 +1591,22 @@ export default function VendedorTRR_Master() {
   }, [aba, moduloAtivo]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-40 font-sans antialiased">
-      <header className="px-5 pt-8 pb-4 sticky top-0 bg-white/95 border-b border-slate-200 shadow-sm z-50">
+    <div className="min-h-screen bg-[#071426] text-slate-100 pb-40 font-sans antialiased">
+      <header className="px-5 pt-8 pb-5 sticky top-0 bg-[#071426]/95 border-b border-red-600/40 shadow-2xl shadow-black/30 z-50 backdrop-blur-xl">
         <div className="flex justify-between items-center mb-3 gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <img
               src="/icon.png"
-              alt="Ícone Vendedor TRR"
-              className="w-12 h-12 rounded-2xl object-cover border border-slate-200 shadow-lg shrink-0"
+              alt="Ícone VTRR Mobile"
+              className="w-14 h-14 rounded-2xl object-cover border border-red-500/60 shadow-lg shadow-red-950/40 shrink-0 bg-white"
             />
 
             <div className="min-w-0">
-              <h1 className="text-sm md:text-base font-black text-slate-900 uppercase tracking-wide truncate">
-                Vendedor TRR
+              <h1 className="text-sm md:text-base font-black text-white uppercase tracking-wide truncate">
+                VTRR Mobile
               </h1>
-              <p className="text-[10px] md:text-[11px] text-slate-500 uppercase tracking-widest truncate">
-                Sistema de Prospecção
+              <p className="text-[10px] md:text-[11px] text-red-200 uppercase tracking-widest truncate">
+                Prospecção TRR
               </p>
             </div>
           </div>
@@ -1616,7 +1616,7 @@ export default function VendedorTRR_Master() {
               <button
                 key={m}
                 onClick={() => trocarModulo(m)}
-                className={moduloAtivo === m ? 'text-blue-700 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-800'}
+                className={moduloAtivo === m ? 'text-white border-b-2 border-red-500' : 'text-slate-300 hover:text-white'}
               >
                 {m === MODULOS.TODO
                   ? 'LISTA'
@@ -1631,7 +1631,7 @@ export default function VendedorTRR_Master() {
         </div>
 
         <div className="flex justify-between items-center gap-3">
-          <h2 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">
+          <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white drop-shadow">
             {tituloPrincipal}
           </h2>
 
@@ -1640,28 +1640,28 @@ export default function VendedorTRR_Master() {
               <>
                 <button
                   onClick={limparInativos}
-                  className="text-[9px] bg-red-600 px-4 py-2 rounded-full font-bold"
+                  className="text-[9px] bg-red-600 text-white px-4 py-2 rounded-full font-bold shadow-lg shadow-red-950/30"
                 >
                   🗑️ LIMPAR
                 </button>
 
                 <button
                   onClick={excluirNaoAtivosDoBanco}
-                  className="text-[9px] bg-orange-600 px-4 py-2 rounded-full font-bold"
+                  className="text-[9px] bg-red-500 text-white px-4 py-2 rounded-full font-bold shadow-lg shadow-red-950/30"
                 >
                   🚫 NÃO ATIVOS
                 </button>
 
                 <button
                   onClick={atualizarFaltantes}
-                  className="text-[9px] bg-emerald-600 px-4 py-2 rounded-full font-bold"
+                  className="text-[9px] bg-white text-[#071426] px-4 py-2 rounded-full font-bold shadow-lg"
                 >
                   🔄 ENRIQUECER
                 </button>
 
                 <button
                   onClick={() => setMostrarExportacao(!mostrarExportacao)}
-                  className="text-[9px] bg-blue-700 px-4 py-2 rounded-full font-bold border border-blue-200"
+                  className="text-[9px] bg-red-600 text-white px-4 py-2 rounded-full font-bold border border-red-300/40 shadow-lg shadow-red-950/30"
                 >
                   EXPORTAR XLSX
                 </button>
@@ -1671,7 +1671,7 @@ export default function VendedorTRR_Master() {
             {moduloAtivo !== MODULOS.ANALITICA && moduloAtivo !== MODULOS.ANALITICA_VENDAS && (
               <button
                 onClick={() => setMostrarFiltros(!mostrarFiltros)}
-                className="text-[9px] bg-slate-100 px-4 py-2 rounded-full font-bold border border-slate-200"
+                className="text-[9px] bg-white/10 text-white px-4 py-2 rounded-full font-bold border border-white/20 hover:bg-white/20"
               >
                 FILTROS
               </button>
@@ -1684,14 +1684,14 @@ export default function VendedorTRR_Master() {
             <input
               type="text"
               placeholder="Busca rápida..."
-              className="w-full bg-white p-3 rounded-xl text-xs outline-none border border-slate-200 text-slate-900 shadow-sm"
+              className="w-full bg-white/95 p-3 rounded-xl text-xs outline-none border border-red-500/30 text-slate-900 shadow-sm focus:ring-2 focus:ring-red-500/40"
               value={buscaGlobal}
               onChange={(e) => setBuscaGlobal(e.target.value)}
             />
 
-            <div className="bg-white border border-slate-200 rounded-2xl p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div className="bg-white/95 border border-red-500/20 rounded-2xl p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">Ordenação do Estoque</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-red-700">Ordenação do Estoque</p>
                 <p className="text-[11px] text-slate-500 mt-1">
                   Por padrão, os leads importados ou reimportados ficam no topo, como mais recentes.
                 </p>
@@ -1712,7 +1712,7 @@ export default function VendedorTRR_Master() {
             {mostrarExportacao && (
               <div className="p-4 bg-white rounded-2xl border border-blue-200 space-y-4">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 mb-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-red-700 mb-2">
                     Exportação XLSX
                   </p>
                   <p className="text-[11px] text-slate-600">
@@ -1752,7 +1752,7 @@ export default function VendedorTRR_Master() {
               <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-4">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-red-700">
                       Filtros estilo Excel
                     </p>
                     <p className="text-[11px] text-slate-500 mt-1">
@@ -1814,7 +1814,7 @@ export default function VendedorTRR_Master() {
                 </p>
 
                 {!carregando && buscaGlobal !== buscaDebounced && (
-                  <p className="text-[10px] text-blue-600 font-black uppercase tracking-widest animate-pulse">
+                  <p className="text-[10px] text-red-600 font-black uppercase tracking-widest animate-pulse">
                     Atualizando busca...
                   </p>
                 )}
@@ -1827,7 +1827,7 @@ export default function VendedorTRR_Master() {
               </div>
 
               {statusProcesso && (
-                <p className="text-[9px] text-blue-600 animate-pulse font-black uppercase italic">
+                <p className="text-[9px] text-red-300 animate-pulse font-black uppercase italic">
                   {statusProcesso}
                 </p>
               )}
@@ -1836,7 +1836,7 @@ export default function VendedorTRR_Master() {
         )}
       </header>
 
-      <main className="px-4 mt-6">
+      <main className="px-4 mt-6 max-w-7xl mx-auto">
         {resultadoBusca && (
           <div className="bg-emerald-50 border border-emerald-500/50 p-4 rounded-2xl mb-6 flex justify-between items-center text-emerald-700 text-xs font-bold animate-pulse gap-3">
             <span>✅ {resultadoBusca}</span>
@@ -1863,7 +1863,7 @@ export default function VendedorTRR_Master() {
 
         {moduloAtivo === MODULOS.TODO && (
           <>
-            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="bg-white border border-red-500/20 rounded-3xl overflow-hidden shadow-2xl shadow-black/20">
               {carregando ? (
                 <div className="text-center py-20 text-[10px] animate-pulse text-slate-500 font-black uppercase tracking-widest">
                   Sincronizando...
@@ -1971,7 +1971,7 @@ export default function VendedorTRR_Master() {
               />
               <button
                 onClick={buscarECadastrarCNPJs}
-                className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-sm text-slate-900 shadow-lg active:scale-95 transition-all"
+                className="w-full bg-red-600 py-4 rounded-2xl font-black uppercase text-sm text-white shadow-lg shadow-red-950/30 active:scale-95 transition-all hover:bg-red-500"
               >
                 PESCAR E SALVAR
               </button>
@@ -2048,13 +2048,13 @@ export default function VendedorTRR_Master() {
         />
       )}
 
-      <nav className="fixed bottom-6 left-6 right-6 h-16 bg-white/95 backdrop-blur-md border border-slate-200 rounded-full px-4 md:px-8 flex justify-around items-center z-50 shadow-xl shadow-slate-200/70">
+      <nav className="fixed bottom-6 left-6 right-6 h-16 bg-[#071426]/95 backdrop-blur-md border border-red-500/50 rounded-full px-4 md:px-8 flex justify-around items-center z-50 shadow-2xl shadow-black/40">
         {[ABAS.ESTOQUE, ABAS.TRIAGEM, ABAS.MESA].map((a) => (
           <button
             key={a}
             onClick={() => setAba(a)}
             className={`text-[10px] md:text-[11px] font-black uppercase tracking-widest ${
-              aba === a ? 'text-blue-700' : 'text-slate-500 hover:text-slate-800'
+              aba === a ? 'text-white' : 'text-slate-300 hover:text-white'
             }`}
           >
             {a === ABAS.ESTOQUE ? 'Estoque' : a === ABAS.TRIAGEM ? 'Triagem' : 'Mesa'}
