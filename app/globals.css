@@ -3,79 +3,21 @@
 @tailwind utilities;
 
 :root {
-  --vtrr-blue: #071426;
-  --vtrr-blue-2: #0e2748;
-  --vtrr-red: #dc2626;
-  --vtrr-red-2: #ef4444;
   --foreground-rgb: 255, 255, 255;
-  --background-rgb: 7, 20, 38;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html {
-  background: var(--vtrr-blue);
-  min-height: 100%;
-  color-scheme: dark;
+  --background-rgb: 0, 0, 0;
 }
 
 body {
   color: rgb(var(--foreground-rgb));
-  background:
-    radial-gradient(circle at top left, rgba(220, 38, 38, 0.18), transparent 28rem),
-    linear-gradient(180deg, var(--vtrr-blue) 0%, #020617 100%);
+  background: rgb(var(--background-rgb));
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: geometricPrecision;
+  /* Garante que o fundo seja preto sólido em qualquer dispositivo */
+  background-color: #000000; 
 }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-
-button {
-  cursor: pointer;
-}
-
-button:disabled {
-  cursor: not-allowed;
-}
-
-::selection {
-  background: rgba(220, 38, 38, 0.35);
-  color: white;
-}
-
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background: #020617;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 999px;
-  border: 2px solid #020617;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--vtrr-red);
-}
-
-@media (max-width: 768px) {
-  body {
-    background:
-      radial-gradient(circle at top, rgba(220, 38, 38, 0.22), transparent 18rem),
-      linear-gradient(180deg, var(--vtrr-blue) 0%, #020617 100%);
-  }
+/* Ajuste para evitar que o iOS mude a cor do fundo no scroll */
+html {
+  background-color: #000000;
 }

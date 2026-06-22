@@ -14,8 +14,6 @@ const valorTexto = (valor, fallback = '') => {
   return texto === '' ? fallback : texto;
 };
 
-const isAtiva = (valor) => String(valor || '').trim().toUpperCase() === 'ATIVA';
-
 const converterDataBRparaISO = (valor) => {
   if (!valor) return null;
 
@@ -82,7 +80,7 @@ const montarPayloadReceita = (
       null,
     cnae_principal_codigo: info.cnae_fiscal
       ? String(info.cnae_fiscal)
-      : leadExistente.cnae_principal_codigo || '',
+      : (leadExistente.cnae_principal_codigo || ''),
     cnae_principal_descricao: valorTexto(
       info.cnae_fiscal_descricao,
       leadExistente.cnae_principal_descricao || 'Não informado'
@@ -150,13 +148,6 @@ async function processarCNPJViaAPI(cnpj, origem = 'Meu To Do - aba CNPJ') {
   }
 
   const info = consulta.dados || {};
-  const situacao = valorTexto(info.descricao_situacao_cadastral, '');
-
-  if (!isAtiva(situacao)) {
-    const erro = new Error(`CNPJ não está ATIVO (${situacao || 'situação não informada'}). Não foi salvo no VTRR.`);
-    erro.status = 422;
-    throw erro;
-  }
 
   const { data: existente, error: erroExistente } = await supabase
     .from('empresas_mestre')
@@ -178,13 +169,7 @@ async function processarCNPJViaAPI(cnpj, origem = 'Meu To Do - aba CNPJ') {
     throw new Error(`Erro ao salvar no estoque: ${erroUpsert.message}`);
   }
 
-  return {
-    payload,
-    info,
-    ja_existia: Boolean(existente),
-    fontes: consulta.fontes || [],
-    aviso: consulta.aviso || '',
-  };
+  return payload;
 }
 
 export async function POST(req) {
@@ -200,37 +185,16 @@ export async function POST(req) {
       );
     }
 
-    const resultado = await processarCNPJViaAPI(cnpj, origem);
-    const payloadSalvo = resultado.payload;
+    const payloadSalvo = await processarCNPJViaAPI(cnpj, origem);
 
     return NextResponse.json({
       ok: true,
-      message: resultado.ja_existia
-        ? 'CNPJ consultado em todas as fontes disponíveis e cadastro atualizado no VTRR.'
-        : 'CNPJ consultado em todas as fontes disponíveis e salvo no estoque do VTRR.',
-      ja_existia: resultado.ja_existia,
-      fontes: resultado.fontes,
-      aviso: resultado.aviso,
+      message: 'CNPJ recebido, consultado e salvo no estoque do VTRR.',
       empresa: {
-        id: payloadSalvo.id,
         cnpj: payloadSalvo.cnpj,
         razao_social: payloadSalvo.razao_social,
         nome_fantasia: payloadSalvo.nome_fantasia,
-        municipio: payloadSalvo.municipio,
-        uf: payloadSalvo.uf,
-        bairro: payloadSalvo.bairro,
-        logradouro: payloadSalvo.logradouro,
-        numero: payloadSalvo.numero,
-        cep: payloadSalvo.cep,
-        telefone_1: payloadSalvo.telefone_1,
-        telefone_2: payloadSalvo.telefone_2,
-        email: payloadSalvo.email,
-        cnae_principal_codigo: payloadSalvo.cnae_principal_codigo,
-        cnae_principal_descricao: payloadSalvo.cnae_principal_descricao,
-        cnae_secundario: payloadSalvo.cnae_secundario,
-        situacao_cadastral: payloadSalvo.situacao_cadastral,
         status_lead: payloadSalvo.status_lead,
-        status_vendedor: payloadSalvo.status_vendedor,
         fonte_lead: payloadSalvo.fonte_lead,
       },
     });
@@ -242,7 +206,7 @@ export async function POST(req) {
         ok: false,
         error: error?.message || 'Erro interno ao importar CNPJ.',
       },
-      { status: error?.status || 500 }
+      { status: 500 }
     );
   }
 }
@@ -250,6 +214,6 @@ export async function POST(req) {
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    message: 'Rota /api/importar-cnpj online. Porta única de CNPJ do ecossistema VTRR/MTD.',
+    message: 'Rota /api/importar-cnpj online.',
   });
 }

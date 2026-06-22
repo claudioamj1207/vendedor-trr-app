@@ -239,32 +239,32 @@ export default function LeadVisualModal({
   return (
     <div className="fixed inset-0 z-[9999]">
       <div
-        className="absolute inset-0 bg-[#020617]/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-900/45 backdrop-blur-sm"
         onClick={handleClose}
       />
 
       <div className="absolute inset-0 flex items-center justify-center p-4 md:p-6">
-        <div className="w-full max-w-6xl max-h-[94vh] overflow-hidden rounded-3xl border border-red-500/30 bg-white shadow-2xl shadow-black/40">
-          <div className="sticky top-0 z-10 bg-[#071426]/95 backdrop-blur border-b border-red-500/40 px-5 py-4">
+        <div className="w-full max-w-6xl max-h-[94vh] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+          <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-200 px-5 py-4">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-widest text-red-200 mb-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 mb-2">
                   Painel do Lead
                 </p>
 
-                <h2 className="text-lg md:text-2xl font-black uppercase text-white leading-tight break-words">
+                <h2 className="text-lg md:text-2xl font-black uppercase text-slate-900 leading-tight break-words">
                   {lead.razao_social || 'Sem razão social'}
                 </h2>
 
                 <div className="flex flex-wrap gap-2 mt-3">
-                  <span className="text-[10px] bg-red-50 px-3 py-1 rounded-full text-red-700 font-black border border-red-200">
+                  <span className="text-[10px] bg-blue-50 px-3 py-1 rounded-full text-blue-700 font-black border border-blue-200">
                     {formatarCNPJ(lead.cnpj)}
                   </span>
 
                   <button
                     type="button"
                     onClick={() => copiarTexto(cnpjLimpo)}
-                    className="text-[10px] bg-red-50 px-3 py-1 rounded-full text-red-700 font-black border border-red-200 hover:bg-blue-100"
+                    className="text-[10px] bg-blue-50 px-3 py-1 rounded-full text-blue-700 font-black border border-blue-200 hover:bg-blue-100"
                   >
                     Copiar CNPJ
                   </button>

@@ -64,15 +64,15 @@ export default function LeadActionRow({
   }
 
   return (
-    <div className="px-4 py-3 border-b border-slate-200 bg-white hover:bg-[#f8fafc] transition-colors">
+    <div className="px-4 py-3 border-b border-slate-200 bg-white hover:bg-slate-50 transition-colors">
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <h3 className="text-[12px] md:text-[13px] font-black uppercase text-[#071426] truncate tracking-wide">
+          <h3 className="text-[12px] md:text-[13px] font-black uppercase text-slate-900 truncate tracking-wide">
             {lead?.razao_social || 'SEM RAZÃO SOCIAL'}
           </h3>
 
           <div className="flex flex-wrap items-center gap-2 mt-1.5">
-            <span className="text-[10px] font-black text-red-700">
+            <span className="text-[10px] font-black text-blue-700">
               {cnpjFormatado}
             </span>
 
@@ -80,7 +80,7 @@ export default function LeadActionRow({
               type="button"
               onClick={() => copiarTexto(cnpjLimpo)}
               title="Copiar CNPJ"
-              className="px-2.5 py-1 text-[9px] rounded-lg bg-red-50 text-red-700 font-black border border-red-200 hover:bg-red-100 transition-colors"
+              className="px-2.5 py-1 text-[9px] rounded-lg bg-blue-50 text-blue-700 font-black border border-blue-200 hover:bg-blue-100 transition-colors"
             >
               COPIAR
             </button>
@@ -117,7 +117,7 @@ export default function LeadActionRow({
             type="button"
             onClick={handleEnviarParaMeuToDo}
             title="Enviar para Meu To Do"
-            className="px-3 py-1.5 text-[10px] rounded-lg font-black uppercase tracking-wide bg-[#071426] text-white hover:bg-[#0e2748] border border-red-500/40 active:scale-95 transition-all shadow-sm"
+            className="px-3 py-1.5 text-[10px] rounded-lg font-black uppercase tracking-wide bg-violet-600 text-white hover:bg-violet-500 active:scale-95 transition-all shadow-sm"
           >
             MEU TO DO
           </button>
@@ -126,7 +126,7 @@ export default function LeadActionRow({
             type="button"
             onClick={() => abrirRota(lead)}
             title="Abrir rota"
-            className="px-3 py-1.5 text-[10px] rounded-lg font-black uppercase tracking-wide bg-red-600 text-white hover:bg-red-500 active:scale-95 transition-all shadow-sm"
+            className="px-3 py-1.5 text-[10px] rounded-lg font-black uppercase tracking-wide bg-emerald-600 text-white hover:bg-emerald-500 active:scale-95 transition-all shadow-sm"
           >
             ROTA
           </button>
