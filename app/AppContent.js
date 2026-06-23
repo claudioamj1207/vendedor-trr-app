@@ -25,8 +25,7 @@ const MODULOS = {
 
 const ABAS = {
   ESTOQUE: 'estoque',
-  TRIAGEM: 'triagem',
-  MESA: 'mesa'
+  CATEGORIAS: 'categorias'
 };
 
 const FILTROS_INICIAIS = {
@@ -85,6 +84,98 @@ const ORDENACOES_LEADS = {
   AZ: 'az',
   ZA: 'za'
 };
+const CATEGORIAS_TRR = [
+  {
+    id: 'transporte_logistica',
+    emoji: '🚚',
+    titulo: 'Transporte / Logística',
+    descricao: 'Transportadoras, logística, armazenagem e movimentação de cargas.',
+    palavras: ['transporte', 'transportadora', 'rodoviário', 'rodoviario', 'carga', 'cargas', 'logística', 'logistica', 'armazen', 'depósito', 'deposito', 'movimentação', 'movimentacao', 'correio', 'entrega']
+  },
+  {
+    id: 'industria',
+    emoji: '🏭',
+    titulo: 'Indústria',
+    descricao: 'Fábricas, metalúrgicas, plásticos, eletroeletrônicos e polo industrial.',
+    palavras: ['indústria', 'industria', 'fabricação', 'fabricacao', 'fabrica', 'fábrica', 'metal', 'metalúrgica', 'metalurgica', 'plástico', 'plastico', 'eletro', 'química', 'quimica', 'transformação', 'transformacao']
+  },
+  {
+    id: 'material_construcao',
+    emoji: '🧱',
+    titulo: 'Material de Construção',
+    descricao: 'Depósitos, atacadistas e lojas de materiais de construção.',
+    palavras: ['material de construção', 'material de construcao', 'construção', 'construcao', 'cimento', 'areia', 'brita', 'ferragem', 'ferragens', 'madeira', 'tintas', 'hidráulico', 'hidraulico', 'elétrico', 'eletrico']
+  },
+  {
+    id: 'construtoras',
+    emoji: '🏗️',
+    titulo: 'Construtoras',
+    descricao: 'Construtoras, obras, engenharia, incorporação e terraplenagem.',
+    palavras: ['construtora', 'construção de edifícios', 'construcao de edificios', 'obra', 'obras', 'engenharia', 'incorporação', 'incorporacao', 'terraplenagem', 'pavimentação', 'pavimentacao', 'empreiteira']
+  },
+  {
+    id: 'navegacao',
+    emoji: '🚢',
+    titulo: 'Navegação',
+    descricao: 'Embarcações, transporte fluvial, marítimo e atividades portuárias.',
+    palavras: ['navegação', 'navegacao', 'embarcação', 'embarcacao', 'embarcações', 'embarcacoes', 'aquaviário', 'aquaviario', 'marítimo', 'maritimo', 'fluvial', 'porto', 'portuária', 'portuaria', 'cabotagem']
+  },
+  {
+    id: 'agro_alimentos',
+    emoji: '🌾',
+    titulo: 'Agropecuária / Alimentos',
+    descricao: 'Agro, pecuária, alimentos, frigoríficos, pescado e cooperativas.',
+    palavras: ['agro', 'agricultura', 'pecuária', 'pecuaria', 'alimento', 'alimentos', 'frigorífico', 'frigorifico', 'pescado', 'laticínio', 'laticinio', 'cooperativa', 'grãos', 'graos', 'abate']
+  },
+  {
+    id: 'combustiveis_energia',
+    emoji: '⛽',
+    titulo: 'Combustíveis e Energia',
+    descricao: 'Postos, combustíveis, energia, gás e geração elétrica.',
+    palavras: ['combustível', 'combustivel', 'combustíveis', 'combustiveis', 'posto', 'postos', 'energia', 'eletricidade', 'elétrica', 'eletrica', 'gás', 'gas', 'geração', 'geracao', 'distribuição de energia', 'distribuicao de energia']
+  },
+  {
+    id: 'maquinas_equipamentos',
+    emoji: '🚜',
+    titulo: 'Máquinas e Equipamentos',
+    descricao: 'Máquinas, equipamentos, motores, manutenção e locação.',
+    palavras: ['máquina', 'maquina', 'máquinas', 'maquinas', 'equipamento', 'equipamentos', 'motor', 'motores', 'manutenção', 'manutencao', 'locação', 'locacao', 'peças', 'pecas', 'tratores']
+  },
+  {
+    id: 'outros',
+    emoji: '📦',
+    titulo: 'Outros',
+    descricao: 'Leads que não se enquadram nas categorias principais.',
+    palavras: []
+  }
+];
+
+const normalizarTexto = (valor) => String(valor || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase();
+
+const textoCategoriaLead = (lead) => normalizarTexto([
+  lead.cnae_principal_descricao,
+  lead.cnae_secundario,
+  lead.categoria_trr,
+  lead.razao_social,
+  lead.nome_fantasia
+].filter(Boolean).join(' '));
+
+const leadPertenceCategoria = (lead, categoria) => {
+  if (!categoria) return false;
+
+  const texto = textoCategoriaLead(lead);
+  const categoriasPrincipais = CATEGORIAS_TRR.filter((item) => item.id !== 'outros');
+
+  if (categoria.id === 'outros') {
+    return !categoriasPrincipais.some((item) => item.palavras.some((palavra) => texto.includes(normalizarTexto(palavra))));
+  }
+
+  return categoria.palavras.some((palavra) => texto.includes(normalizarTexto(palavra)));
+};
+
 
 const normalizarCNPJ = (cnpj) => String(cnpj || '').replace(/\D/g, '');
 
@@ -332,7 +423,7 @@ const montarHtmlCadastroLead = (lead) => {
     </head>
     <body>
       <h1>Ficha de Cadastro</h1>
-      <p class="sub">Vendedor TRR</p>
+      <p class="sub">VTRR</p>
       <table>
         <tbody>
           ${linhas
@@ -379,6 +470,7 @@ export default function VendedorTRR_Master() {
   const [incrementarModalAberto, setIncrementarModalAberto] = useState(false);
   const [salvandoIncremento, setSalvandoIncremento] = useState(false);
   const [ordenacaoLeads, setOrdenacaoLeads] = useState(ORDENACOES_LEADS.INCLUSAO_RECENTE);
+  const [categoriaAtiva, setCategoriaAtiva] = useState('transporte_logistica');
 
   const limparMensagens = useCallback(() => {
     setResultadoBusca('');
@@ -565,9 +657,7 @@ export default function VendedorTRR_Master() {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Filtrados');
 
-      let nomeAba = 'estoque';
-      if (aba === ABAS.TRIAGEM) nomeAba = 'triagem';
-      if (aba === ABAS.MESA) nomeAba = 'mesa-de-trabalho';
+      let nomeAba = aba === ABAS.CATEGORIAS ? `categoria-${categoriaAtiva}` : 'estoque';
 
       XLSX.writeFile(wb, `leads-filtrados-${nomeAba}.xlsx`);
 
@@ -579,7 +669,7 @@ export default function VendedorTRR_Master() {
     } finally {
       setExportandoFiltrados(false);
     }
-  }, [aba, leadsFiltrados, limparMensagens, prepararDadosPlanilha]);
+  }, [aba, categoriaAtiva, leadsFiltrados, limparMensagens, prepararDadosPlanilha]);
 
   const processarEmLotes = useCallback(async ({
     itens,
@@ -701,15 +791,8 @@ export default function VendedorTRR_Master() {
           .select('*')
       );
 
-      if (moduloAtivo === MODULOS.TODO) {
-        if (aba === ABAS.ESTOQUE) {
-          query = query.eq('status_lead', STATUS_LEAD.NOVO);
-        } else if (aba === ABAS.TRIAGEM) {
-          query = query.eq('status_lead', STATUS_LEAD.TRIAGEM);
-        } else if (aba === ABAS.MESA) {
-          query = query.eq('status_lead', STATUS_LEAD.MESA_DE_TRABALHO);
-        }
-      }
+      // No módulo Estoque/Categorias, a base agora é única: todos os leads do banco.
+      // Os filtros visuais e as categorias trabalham sobre esse estoque completo.
 
       let todosLeads = [];
       let de = 0;
@@ -789,6 +872,23 @@ export default function VendedorTRR_Master() {
     return leadsFiltrados.slice(inicio, fim);
   }, [leadsFiltrados, paginaAtual]);
 
+
+  const contagemCategorias = useMemo(() => {
+    return CATEGORIAS_TRR.reduce((acc, categoria) => {
+      acc[categoria.id] = leads.filter((lead) => leadPertenceCategoria(lead, categoria)).length;
+      return acc;
+    }, {});
+  }, [leads]);
+
+  const categoriaSelecionada = useMemo(() => (
+    CATEGORIAS_TRR.find((categoria) => categoria.id === categoriaAtiva) || CATEGORIAS_TRR[0]
+  ), [categoriaAtiva]);
+
+  const leadsDaCategoriaSelecionada = useMemo(() => {
+    if (aba !== ABAS.CATEGORIAS || moduloAtivo !== MODULOS.TODO) return [];
+    return leadsFiltrados.filter((lead) => leadPertenceCategoria(lead, categoriaSelecionada));
+  }, [aba, moduloAtivo, leadsFiltrados, categoriaSelecionada]);
+
   const paginaInicial = useMemo(() => {
     if (leadsFiltrados.length === 0) return 0;
     return (paginaAtual - 1) * ITENS_POR_PAGINA + 1;
@@ -801,7 +901,7 @@ export default function VendedorTRR_Master() {
 
   useEffect(() => {
     setPaginaAtual(1);
-  }, [buscaDebounced, filtrosAtivos, aba, moduloAtivo, ordenacaoLeads]);
+  }, [buscaDebounced, filtrosAtivos, aba, moduloAtivo, ordenacaoLeads, categoriaAtiva]);
 
   useEffect(() => {
     if (paginaAtual > totalPaginas) {
@@ -1565,10 +1665,15 @@ export default function VendedorTRR_Master() {
   ]);
 
   const renderLinha = useCallback((lead) => {
-    let actions = [];
-    if (aba === ABAS.ESTOQUE) actions = montarAcoesEstoque(lead);
-    if (aba === ABAS.TRIAGEM) actions = montarAcoesTriagem(lead);
-    if (aba === ABAS.MESA) actions = montarAcoesMesa(lead);
+    let actions = montarAcoesEstoque(lead);
+
+    if (lead.status_lead === STATUS_LEAD.TRIAGEM) {
+      actions = montarAcoesTriagem(lead);
+    }
+
+    if (lead.status_lead === STATUS_LEAD.MESA_DE_TRABALHO) {
+      actions = montarAcoesMesa(lead);
+    }
 
     return (
       <LeadActionRow
@@ -1576,37 +1681,36 @@ export default function VendedorTRR_Master() {
         lead={lead}
         formatarCNPJ={formatarCNPJ}
         actions={actions}
-        onEnviarParaMeuToDo={aba === ABAS.MESA ? enviarLeadParaMeuToDo : undefined}
+        onEnviarParaMeuToDo={lead.status_lead === STATUS_LEAD.MESA_DE_TRABALHO ? enviarLeadParaMeuToDo : undefined}
       />
     );
-  }, [aba, montarAcoesEstoque, montarAcoesMesa, montarAcoesTriagem, enviarLeadParaMeuToDo]);
+  }, [montarAcoesEstoque, montarAcoesMesa, montarAcoesTriagem, enviarLeadParaMeuToDo]);
 
   const tituloPrincipal = useMemo(() => {
     if (moduloAtivo === MODULOS.PESCARIA) return 'Pescaria de CNPJ';
     if (moduloAtivo === MODULOS.ANALITICA) return 'Visão Analítica';
     if (moduloAtivo === MODULOS.ANALITICA_VENDAS) return 'Analítica de Vendas';
-    if (aba === ABAS.TRIAGEM) return 'Triagem';
-    if (aba === ABAS.MESA) return 'Mesa de Trabalho';
+    if (aba === ABAS.CATEGORIAS) return 'Categorias';
     return 'Estoque';
   }, [aba, moduloAtivo]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-40 font-sans antialiased">
-      <header className="px-5 pt-8 pb-4 sticky top-0 bg-white/95 border-b border-slate-200 shadow-sm z-50">
+      <header className="px-5 pt-8 pb-4 sticky top-0 bg-[#061a3a]/95 border-b border-red-700/40 shadow-sm z-50 text-white">
         <div className="flex justify-between items-center mb-3 gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <img
               src="/icon.png"
-              alt="Ícone Vendedor TRR"
-              className="w-12 h-12 rounded-2xl object-cover border border-slate-200 shadow-lg shrink-0"
+              alt="Ícone VTRR"
+              className="w-12 h-12 rounded-2xl object-cover border border-white/20 shadow-lg shrink-0 bg-[#061a3a]"
             />
 
             <div className="min-w-0">
-              <h1 className="text-sm md:text-base font-black text-slate-900 uppercase tracking-wide truncate">
+              <h1 className="text-sm md:text-base font-black text-white uppercase tracking-wide truncate">
                 Vendedor TRR
               </h1>
-              <p className="text-[10px] md:text-[11px] text-slate-500 uppercase tracking-widest truncate">
-                Sistema de Prospecção
+              <p className="text-[10px] md:text-[11px] text-white/70 uppercase tracking-widest truncate">
+                Vendedor TRR
               </p>
             </div>
           </div>
@@ -1616,7 +1720,7 @@ export default function VendedorTRR_Master() {
               <button
                 key={m}
                 onClick={() => trocarModulo(m)}
-                className={moduloAtivo === m ? 'text-blue-700 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-800'}
+                className={moduloAtivo === m ? 'text-white border-b-2 border-red-500' : 'text-white/60 hover:text-white'}
               >
                 {m === MODULOS.TODO
                   ? 'LISTA'
@@ -1631,7 +1735,7 @@ export default function VendedorTRR_Master() {
         </div>
 
         <div className="flex justify-between items-center gap-3">
-          <h2 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">
+          <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">
             {tituloPrincipal}
           </h2>
 
@@ -1640,28 +1744,28 @@ export default function VendedorTRR_Master() {
               <>
                 <button
                   onClick={limparInativos}
-                  className="text-[9px] bg-red-600 px-4 py-2 rounded-full font-bold"
+                  className="text-[9px] bg-red-600 text-white px-4 py-2 rounded-full font-bold"
                 >
                   🗑️ LIMPAR
                 </button>
 
                 <button
                   onClick={excluirNaoAtivosDoBanco}
-                  className="text-[9px] bg-orange-600 px-4 py-2 rounded-full font-bold"
+                  className="text-[9px] bg-orange-600 text-white px-4 py-2 rounded-full font-bold"
                 >
                   🚫 NÃO ATIVOS
                 </button>
 
                 <button
                   onClick={atualizarFaltantes}
-                  className="text-[9px] bg-emerald-600 px-4 py-2 rounded-full font-bold"
+                  className="text-[9px] bg-emerald-600 text-white px-4 py-2 rounded-full font-bold"
                 >
                   🔄 ENRIQUECER
                 </button>
 
                 <button
                   onClick={() => setMostrarExportacao(!mostrarExportacao)}
-                  className="text-[9px] bg-blue-700 px-4 py-2 rounded-full font-bold border border-blue-200"
+                  className="text-[9px] bg-blue-700 text-white px-4 py-2 rounded-full font-bold border border-blue-200"
                 >
                   EXPORTAR XLSX
                 </button>
@@ -1671,7 +1775,7 @@ export default function VendedorTRR_Master() {
             {moduloAtivo !== MODULOS.ANALITICA && moduloAtivo !== MODULOS.ANALITICA_VENDAS && (
               <button
                 onClick={() => setMostrarFiltros(!mostrarFiltros)}
-                className="text-[9px] bg-slate-100 px-4 py-2 rounded-full font-bold border border-slate-200"
+                className="text-[9px] bg-white/10 text-white px-4 py-2 rounded-full font-bold border border-white/20"
               >
                 FILTROS
               </button>
@@ -1861,7 +1965,7 @@ export default function VendedorTRR_Master() {
           </div>
         )}
 
-        {moduloAtivo === MODULOS.TODO && (
+        {moduloAtivo === MODULOS.TODO && aba === ABAS.ESTOQUE && (
           <>
             <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
               {carregando ? (
@@ -1886,41 +1990,62 @@ export default function VendedorTRR_Master() {
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap justify-center">
-                  <button
-                    onClick={() => irParaPagina(1)}
-                    disabled={paginaAtual === 1}
-                    className="px-3 py-2 rounded-xl text-[10px] font-black bg-slate-100 border border-slate-200 text-slate-700 disabled:opacity-30"
-                  >
-                    Primeira
-                  </button>
-
-                  <button
-                    onClick={() => irParaPagina(paginaAtual - 1)}
-                    disabled={paginaAtual === 1}
-                    className="px-3 py-2 rounded-xl text-[10px] font-black bg-slate-100 border border-slate-200 text-slate-700 disabled:opacity-30"
-                  >
-                    Anterior
-                  </button>
-
-                  <button
-                    onClick={() => irParaPagina(paginaAtual + 1)}
-                    disabled={paginaAtual === totalPaginas}
-                    className="px-3 py-2 rounded-xl text-[10px] font-black bg-slate-100 border border-slate-200 text-slate-700 disabled:opacity-30"
-                  >
-                    Próxima
-                  </button>
-
-                  <button
-                    onClick={() => irParaPagina(totalPaginas)}
-                    disabled={paginaAtual === totalPaginas}
-                    className="px-3 py-2 rounded-xl text-[10px] font-black bg-slate-100 border border-slate-200 text-slate-700 disabled:opacity-30"
-                  >
-                    Última
-                  </button>
+                  <button onClick={() => irParaPagina(1)} disabled={paginaAtual === 1} className="px-3 py-2 rounded-xl text-[10px] font-black bg-slate-100 border border-slate-200 text-slate-700 disabled:opacity-30">Primeira</button>
+                  <button onClick={() => irParaPagina(paginaAtual - 1)} disabled={paginaAtual === 1} className="px-3 py-2 rounded-xl text-[10px] font-black bg-slate-100 border border-slate-200 text-slate-700 disabled:opacity-30">Anterior</button>
+                  <button onClick={() => irParaPagina(paginaAtual + 1)} disabled={paginaAtual === totalPaginas} className="px-3 py-2 rounded-xl text-[10px] font-black bg-slate-100 border border-slate-200 text-slate-700 disabled:opacity-30">Próxima</button>
+                  <button onClick={() => irParaPagina(totalPaginas)} disabled={paginaAtual === totalPaginas} className="px-3 py-2 rounded-xl text-[10px] font-black bg-slate-100 border border-slate-200 text-slate-700 disabled:opacity-30">Última</button>
                 </div>
               </div>
             )}
           </>
+        )}
+
+        {moduloAtivo === MODULOS.TODO && aba === ABAS.CATEGORIAS && (
+          <div className="space-y-6">
+            <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {CATEGORIAS_TRR.map((categoria) => {
+                const ativa = categoriaAtiva === categoria.id;
+                return (
+                  <button
+                    key={categoria.id}
+                    onClick={() => setCategoriaAtiva(categoria.id)}
+                    className={`text-left rounded-3xl border p-5 shadow-sm transition-all ${ativa ? 'bg-[#061a3a] text-white border-red-500 shadow-lg' : 'bg-white text-slate-900 border-slate-200 hover:border-blue-300'}`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="text-3xl">{categoria.emoji}</div>
+                      <span className={`text-[10px] font-black px-3 py-1 rounded-full ${ativa ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                        {contagemCategorias[categoria.id] || 0}
+                      </span>
+                    </div>
+                    <h3 className="mt-4 text-sm font-black uppercase tracking-tight">{categoria.titulo}</h3>
+                    <p className={`mt-2 text-[11px] leading-relaxed ${ativa ? 'text-white/75' : 'text-slate-500'}`}>{categoria.descricao}</p>
+                  </button>
+                );
+              })}
+            </section>
+
+            <section className="bg-white border border-slate-200 rounded-3xl overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">Categoria selecionada</p>
+                  <h3 className="text-lg font-black uppercase text-slate-900">{categoriaSelecionada.emoji} {categoriaSelecionada.titulo}</h3>
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  {leadsDaCategoriaSelecionada.length} lead(s) filtrado(s)
+                </span>
+              </div>
+
+              {carregando ? (
+                <div className="text-center py-20 text-[10px] animate-pulse text-slate-500 font-black uppercase tracking-widest">Sincronizando...</div>
+              ) : leadsDaCategoriaSelecionada.length === 0 ? (
+                <div className="text-center py-20 text-[10px] text-slate-500 font-black uppercase tracking-widest">Nenhum lead nesta categoria</div>
+              ) : (
+                <div className="divide-y divide-slate-200">
+                  {leadsDaCategoriaSelecionada.map((lead) => renderLinha(lead))}
+                </div>
+              )}
+            </section>
+          </div>
         )}
 
         {moduloAtivo === MODULOS.ANALITICA && (
@@ -2048,16 +2173,16 @@ export default function VendedorTRR_Master() {
         />
       )}
 
-      <nav className="fixed bottom-6 left-6 right-6 h-16 bg-white/95 backdrop-blur-md border border-slate-200 rounded-full px-4 md:px-8 flex justify-around items-center z-50 shadow-xl shadow-slate-200/70">
-        {[ABAS.ESTOQUE, ABAS.TRIAGEM, ABAS.MESA].map((a) => (
+      <nav className="fixed bottom-6 left-6 right-6 h-16 bg-[#061a3a]/95 backdrop-blur-md border border-red-700/50 rounded-full px-4 md:px-8 flex justify-around items-center z-50 shadow-xl shadow-slate-900/30">
+        {[ABAS.ESTOQUE, ABAS.CATEGORIAS].map((a) => (
           <button
             key={a}
             onClick={() => setAba(a)}
             className={`text-[10px] md:text-[11px] font-black uppercase tracking-widest ${
-              aba === a ? 'text-blue-700' : 'text-slate-500 hover:text-slate-800'
+              aba === a ? 'text-white border-b-2 border-red-500' : 'text-white/60 hover:text-white'
             }`}
           >
-            {a === ABAS.ESTOQUE ? 'Estoque' : a === ABAS.TRIAGEM ? 'Triagem' : 'Mesa'}
+            {a === ABAS.ESTOQUE ? 'Estoque' : 'Categorias'}
           </button>
         ))}
       </nav>
