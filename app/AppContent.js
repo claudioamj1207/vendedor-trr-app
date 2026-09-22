@@ -9,7 +9,7 @@ import LeadActionRow from '../components/LeadActionRow';
 import VisaoAnalitica from '../components/VisaoAnalitica';
 import AnaliticaVendas from '../components/AnaliticaVendas';
 import ClientesViva from '../components/ClientesViva';
-import { classificarCliente, formatarDocumento } from '../lib/clientesViva.mjs';
+import { classificarCliente, formatarDocumento, extrairCNPJsDoTexto } from '../lib/clientesViva.mjs';
 
 const STATUS_LEAD = {
   NOVO: 'Novo',
@@ -183,20 +183,6 @@ const normalizarCNPJ = (cnpj) => String(cnpj || '').replace(/\D/g, '');
 
 const formatarCNPJ = formatarDocumento;
 
-const extrairCNPJsDoTexto = (texto) => {
-  if (!texto) return [];
-
-  const regex = /\d{2}[.\s,/-]?\d{3}[.\s,/-]?\d{3}[\/\s-]?\d{4}[-\s]?\d{2}|\d{14}/g;
-  const encontrados = texto.match(regex) || [];
-
-  return [
-    ...new Set(
-      encontrados
-        .map((item) => normalizarCNPJ(item))
-        .filter((cnpj) => cnpj.length === 14)
-    )
-  ];
-};
 
 const gerarIndiceBusca = (lead) => {
   return Object.entries(lead)
@@ -732,7 +718,7 @@ export default function VendedorTRR_Master() {
     const cnpjLimpo = normalizarCNPJ(cnpj);
 
     if (cnpjLimpo.length === 11) {
-      return { ok: false, erro: 'CPF é aceito no upload de clientes Viva. A consulta automática empresarial é exclusiva para CNPJ.' };
+      return { ok: false, erro: 'CPF não é importado. A captação aceita somente CNPJ.' };
     }
     if (cnpjLimpo.length !== 14) {
       return { ok: false, erro: 'CNPJ inválido' };
@@ -1264,7 +1250,7 @@ export default function VendedorTRR_Master() {
       for (const registro of todosRegistros) {
         const cnpjNormalizado = normalizarCNPJ(registro.cnpj);
 
-        if (!cnpjNormalizado || ![11, 14].includes(cnpjNormalizado.length)) continue;
+        if (!cnpjNormalizado || cnpjNormalizado.length !== 14) continue;
 
         if (!mapa.has(cnpjNormalizado)) {
           mapa.set(cnpjNormalizado, registro.id);
@@ -2083,7 +2069,7 @@ export default function VendedorTRR_Master() {
             <div className="bg-white p-8 rounded-3xl border border-dashed border-slate-200 text-center">
               <h3 className="text-lg font-black uppercase mb-3 text-slate-900">Upload de arquivo</h3>
               <p className="text-[11px] text-slate-500 mb-4">
-                Envie Excel (.xlsx), texto (.txt) ou PDF textual para pescar CNPJs de qualquer UF. Para CPF e a relação Viva, use Clientes Viva no Estoque.
+                Envie Excel (.xlsx), texto (.txt) ou PDF textual para pescar CNPJs de qualquer UF. CPFs são ignorados. Para a relação de empresas Viva, use Clientes Viva.
               </p>
               <input
                 type="file"

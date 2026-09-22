@@ -17,10 +17,18 @@ begin
   raise exception 'FALHA: permitiu ler tabela diretamente';
  exception when insufficient_privilege then null;
  end;
+ begin
+  perform public.viva_clientes_base('token-sintetico-transacional-viva',jsonb_build_object(
+   'registros',jsonb_build_array(jsonb_build_object('documento','01234567890','nome','CPF bloqueado')),
+   'pendencias','[]'::jsonb,'fonte','teste.csv','data_base','2026-09-22','revisao',0));
+  raise exception 'FALHA: aceitou CPF';
+ exception when raise_exception then
+  if SQLERRM like 'FALHA:%' then raise; end if;
+ end;
  r := public.viva_clientes_base('token-sintetico-transacional-viva');
  v := coalesce((r->'base'->>'revisao')::bigint,0);
  r := public.viva_clientes_base('token-sintetico-transacional-viva',jsonb_build_object(
-  'registros',jsonb_build_array(jsonb_build_object('documento','01234567890','nome','Pessoa fictícia','uf','SP'),jsonb_build_object('documento','01234567000189','nome','Empresa fictícia','uf','SC')),
+  'registros',jsonb_build_array(jsonb_build_object('documento','01234567000260','nome','Filial fictícia','uf','SP'),jsonb_build_object('documento','01234567000189','nome','Empresa fictícia','uf','SC')),
   'pendencias','[]'::jsonb,'fonte','teste.csv','data_base','2026-09-22','revisao',v));
  if jsonb_array_length(r->'base'->'registros')<>2 then raise exception 'FALHA: salvamento'; end if;
  begin

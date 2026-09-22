@@ -33,7 +33,7 @@ begin
   if jsonb_array_length(p_dados->'registros') not between 1 and 20000
     or length(p_dados::text)>10000000 then raise exception 'Quantidade ou tamanho de arquivo inválido.'; end if;
   if exists(select 1 from jsonb_array_elements(p_dados->'registros') r where
-    coalesce(r->>'documento','') !~ '^(\d{11}|\d{14})$' or coalesce(btrim(r->>'nome'),'')='') then
+    coalesce(r->>'documento','') !~ '^\d{14}$' or coalesce(btrim(r->>'nome'),'')='') then
    raise exception 'Há documentos ou nomes inválidos.';
   end if;
   if (select count(*) from jsonb_array_elements(p_dados->'registros')) <>

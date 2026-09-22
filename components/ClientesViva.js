@@ -50,7 +50,7 @@ export default function ClientesViva({ onBaseChange }) {
     else throw new Error('Selecione um arquivo CSV, XLS ou XLSX.');
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:false,defval:''});
     const resultado=analisarLinhasClientes(rows);
-    if(!resultado.registros.length)throw new Error('Nenhum cadastro reconhecido. Use a listagem completa do sistema ou colunas Documento, Nome e, opcionalmente, UF, Município, E-mail e Telefone.');
+    if(!resultado.registros.length)throw new Error('Nenhum CNPJ reconhecido. CPFs não são importados. Use a listagem do sistema ou colunas CNPJ e Nome.');
     if(resultado.registros.length>20000)throw new Error('O limite é de 20.000 cadastros por arquivo.');
     setPrevia({...resultado,fonte:file.name,revisao:base?.revisao||0});setAberto(true);
    }catch(e){setErro(e.message);}finally{setOcupado(false);}
@@ -76,14 +76,14 @@ export default function ClientesViva({ onBaseChange }) {
   </form>}
   {erro && <p role="alert" className="text-sm text-red-700">{erro}</p>}
   {token && aberto && <>
-   <p className="text-xs text-slate-600">CPF e CNPJ de todas as UFs são aceitos. A comparação usa o documento completo; ter cadastro não significa ter comprado. A base é compartilhada entre os usuários com acesso.</p>
+   <p className="text-xs text-slate-600">Somente CNPJs de todas as UFs são aceitos. CPFs são ignorados. A comparação usa o documento completo; ter cadastro não significa ter comprado. A base é compartilhada entre os usuários com acesso.</p>
    {perfil==='proprietario' && <div className="space-y-2 border-t pt-3">
     <label className="block text-sm font-semibold">Atualizar relação de clientes <input aria-label="Arquivo de clientes Viva" disabled={ocupado} type="file" accept=".csv,.xlsx,.xls" onChange={selecionar} className="block mt-2 text-xs" /></label>
     <p className="text-xs text-slate-600">CSV do sistema ou planilha com Documento e Nome. O upload substitui a relação anterior após a prévia; não altera os leads nem seu histórico comercial.</p>
    </div>}
    {previa && <div className="border border-blue-200 bg-blue-50 rounded-xl p-3 space-y-2">
     <h3 className="font-bold">Prévia: {previa.fonte}</h3>
-    <p className="text-sm">{previa.registros.length} cadastros aceitos ({previa.registros.filter(r=>r.documento.length===11).length} CPFs) • {previa.duplicados} duplicados consolidados • {previa.pendencias.length} a conferir</p>
+    <p className="text-sm">{previa.registros.length} CNPJs aceitos • {previa.cpfsIgnorados} CPFs ignorados • {previa.duplicados} duplicados consolidados • {previa.pendencias.length} a conferir</p>
     <p className="text-xs">Documentos são conferidos pelo formato; zeros iniciais são preservados quando presentes no arquivo. A UF não é deduzida do DDD.</p>
     <label className="text-sm">Data da relação <input required type="date" value={dataBase} onChange={e=>setDataBase(e.target.value)} className="border rounded p-1" /></label>
     <ul className="text-xs">{previa.registros.slice(0,5).map(r=><li key={r.documento}>{formatarDocumento(r.documento)} — {r.nome}</li>)}</ul>
@@ -92,9 +92,9 @@ export default function ClientesViva({ onBaseChange }) {
    </div>}
    {!!(previa?.pendencias||base?.pendencias)?.length && <details><summary className="text-sm cursor-pointer">Cadastros a conferir</summary><ul className="text-xs space-y-1 mt-2">{(previa?.pendencias||base?.pendencias).map((r,i)=><li key={i}>Linha {r.linha}: {r.documento} — {r.nome}. {r.motivo}</li>)}</ul></details>}
    {base && <details><summary className="text-sm cursor-pointer">Consultar clientes importados</summary>
-    <input aria-label="Buscar cliente Viva" placeholder="Nome, CPF/CNPJ, município ou UF" value={busca} onChange={e=>setBusca(e.target.value)} className="border rounded p-2 text-sm w-full my-2"/>
+    <input aria-label="Buscar cliente Viva" placeholder="Nome, CNPJ, município ou UF" value={busca} onChange={e=>setBusca(e.target.value)} className="border rounded p-2 text-sm w-full my-2"/>
     <p className="text-xs">{lista.length} resultados. Mostrando até 100; refine a busca.</p>
-    <div className="max-h-80 overflow-auto"><table className="text-xs w-full text-left"><thead><tr><th>CPF/CNPJ</th><th>Nome</th><th>Município / UF</th></tr></thead><tbody>{lista.slice(0,100).map(r=><tr key={r.documento} className="border-t"><td className="p-2 whitespace-nowrap">{formatarDocumento(r.documento)}</td><td>{r.nome}</td><td>{r.municipio||'—'} / {r.uf||'Não informada'}</td></tr>)}</tbody></table></div>
+    <div className="max-h-80 overflow-auto"><table className="text-xs w-full text-left"><thead><tr><th>CNPJ</th><th>Nome</th><th>Município / UF</th></tr></thead><tbody>{lista.slice(0,100).map(r=><tr key={r.documento} className="border-t"><td className="p-2 whitespace-nowrap">{formatarDocumento(r.documento)}</td><td>{r.nome}</td><td>{r.municipio||'—'} / {r.uf||'Não informada'}</td></tr>)}</tbody></table></div>
    </details>}
    <button disabled={ocupado} className="text-xs underline disabled:opacity-50" onClick={()=>{ativoToken.current='';supabase.rpc('app_logout',{p_token:token});sessionStorage.removeItem(STORAGE);setToken('');setPerfil('');publicar(null);setPrevia(null);}}>Fechar acesso à base Viva neste navegador</button>
   </>}

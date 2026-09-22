@@ -2,11 +2,11 @@
 
 O painel Clientes Viva permite consultar a base compartilhada e atualizar a relação por CSV/XLS/XLSX. O proprietário confirma uma prévia antes de substituir a base. Histórico e conteúdo dos leads não são sobrescritos.
 
-A listagem completa do ERP (linhas de documento/nome seguidas de endereço) e tabelas com colunas Documento e Nome são aceitas. CPF/CNPJ são normalizados como texto, sem completar dígitos. CPF tem 11 dígitos e CNPJ 14; isso verifica formato, não dígitos verificadores. Documentos incompletos e nomes ausentes vão para pendências. Duplicados são consolidados pelo documento completo, preservando a última ocorrência. UFs não são restringidas nem deduzidas do DDD.
+A listagem completa do ERP (linhas de documento/nome seguidas de endereço) e tabelas com colunas Documento e Nome são aceitas. Somente CNPJs são importados, como texto e sem completar dígitos. CPFs são ignorados e contabilizados na prévia. CNPJ tem 14 dígitos; isso verifica formato, não dígitos verificadores. Documentos incompletos e nomes ausentes vão para pendências. Duplicados são consolidados pelo documento completo, preservando a última ocorrência. UFs não são restringidas nem deduzidas do DDD.
 
 Após autenticar com o usuário existente do sistema, os leads mostram Cadastrado na Viva, Não cadastrado na base Viva ou A conferir. A classificação considera o documento completo, inclusive filial. Sem base disponível, todos permanecem A conferir. A data da relação aparece no painel e na exportação XLSX. A base reflete cadastro, não histórico de compras.
 
-CPFs são importados e consultados no painel Clientes Viva. A pescaria e a API `/api/importar-cnpj` continuam sendo consultas de empresas; não consultam pessoas físicas em serviços de CNPJ. Elas já aceitavam todas as UFs. CPFs eventualmente existentes no estoque são formatados e classificados; a exclusão de empresas não ativas ignora CPF.
+CPFs são ignorados no painel Clientes Viva e rejeitados também no servidor. A pescaria ignora CPFs em arquivos mistos e não concatena números adjacentes. A API `/api/importar-cnpj` continuam sendo consultas de empresas; não consultam pessoas físicas em serviços de CNPJ. Elas já aceitavam todas as UFs. CPFs eventualmente existentes no estoque são formatados e classificados; a exclusão de empresas não ativas ignora CPF.
 
 ## Armazenamento e acesso
 
