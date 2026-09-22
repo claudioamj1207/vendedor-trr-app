@@ -72,6 +72,7 @@ export default function LeadActionRow({
           </h3>
 
           <div className="flex flex-wrap items-center gap-2 mt-1.5">
+            <span className={`px-2.5 py-1 text-[10px] rounded-lg border ${lead.cadastro_viva === 'Cadastrado na Viva' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>{lead.cadastro_viva || 'A conferir'}</span>
             <span className="text-[10px] font-black text-blue-700">
               {cnpjFormatado}
             </span>
@@ -79,7 +80,7 @@ export default function LeadActionRow({
             <button
               type="button"
               onClick={() => copiarTexto(cnpjLimpo)}
-              title="Copiar CNPJ"
+              title="Copiar CPF/CNPJ"
               className="px-2.5 py-1 text-[9px] rounded-lg bg-blue-50 text-blue-700 font-black border border-blue-200 hover:bg-blue-100 transition-colors"
             >
               COPIAR

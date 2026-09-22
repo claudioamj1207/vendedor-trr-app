@@ -3,6 +3,7 @@ import React, { useEffect, useMemo } from 'react';
 
 function formatarCNPJ(cnpj) {
   const limpo = String(cnpj || '').replace(/\D/g, '');
+  if (limpo.length === 11) return limpo.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
   if (limpo.length !== 14) return cnpj || 'Não informado';
   return limpo.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
 }
@@ -249,7 +250,7 @@ export default function LeadVisualModal({
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 mb-2">
-                  Painel do Lead
+                  Painel do Lead — {lead.cadastro_viva || 'A conferir'}
                 </p>
 
                 <h2 className="text-lg md:text-2xl font-black uppercase text-slate-900 leading-tight break-words">
@@ -266,7 +267,7 @@ export default function LeadVisualModal({
                     onClick={() => copiarTexto(cnpjLimpo)}
                     className="text-[10px] bg-blue-50 px-3 py-1 rounded-full text-blue-700 font-black border border-blue-200 hover:bg-blue-100"
                   >
-                    Copiar CNPJ
+                    Copiar CPF/CNPJ
                   </button>
 
                   <button

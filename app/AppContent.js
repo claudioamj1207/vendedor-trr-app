@@ -8,6 +8,8 @@ import IncrementarLeadModal from '../components/IncrementarLeadModal';
 import LeadActionRow from '../components/LeadActionRow';
 import VisaoAnalitica from '../components/VisaoAnalitica';
 import AnaliticaVendas from '../components/AnaliticaVendas';
+import ClientesViva from '../components/ClientesViva';
+import { classificarCliente, formatarDocumento } from '../lib/clientesViva.mjs';
 
 const STATUS_LEAD = {
   NOVO: 'Novo',
@@ -179,11 +181,7 @@ const leadPertenceCategoria = (lead, categoria) => {
 
 const normalizarCNPJ = (cnpj) => String(cnpj || '').replace(/\D/g, '');
 
-const formatarCNPJ = (cnpj) => {
-  const limpo = normalizarCNPJ(cnpj);
-  if (limpo.length !== 14) return cnpj;
-  return limpo.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
-};
+const formatarCNPJ = formatarDocumento;
 
 const extrairCNPJsDoTexto = (texto) => {
   if (!texto) return [];
@@ -258,7 +256,7 @@ const valorTexto = (valor, fallback = '') => {
 };
 
 const limparObjetoParaBanco = (obj = {}) => {
-  const { _busca, cnpj_normalizado, ...resto } = obj || {};
+  const { _busca, cnpj_normalizado, cadastro_viva, ...resto } = obj || {};
   return resto;
 };
 
@@ -369,7 +367,7 @@ const montarHtmlCadastroLead = (lead) => {
   const telefone = lead.telefone_1 || lead.telefone_2 || '';
   const linhas = [
     ['Razão social', lead.razao_social || ''],
-    ['CNPJ', formatarCNPJ(lead.cnpj || '')],
+    ['CPF/CNPJ', formatarCNPJ(lead.cnpj || '')],
     ['IE', lead.inscricao_estadual || ''],
     ['IM', lead.inscricao_municipal || ''],
     ['Contato', lead.contato_nome || ''],
@@ -444,7 +442,10 @@ const montarHtmlCadastroLead = (lead) => {
 };
 
 export default function VendedorTRR_Master() {
-  const [leads, setLeads] = useState([]);
+  const [leadsOriginais, setLeads] = useState([]);
+  const [baseViva, setBaseViva] = useState(null);
+  const [filtroViva, setFiltroViva] = useState('Todos');
+  const leads = useMemo(() => leadsOriginais.map(lead => ({...lead, cadastro_viva: classificarCliente(lead.cnpj, baseViva)})), [leadsOriginais, baseViva]);
   const [aba, setAba] = useState(ABAS.ESTOQUE);
   const [moduloAtivo, setModuloAtivo] = useState(MODULOS.TODO);
   const [buscaGlobal, setBuscaGlobal] = useState('');
@@ -499,6 +500,7 @@ export default function VendedorTRR_Master() {
 
   const limparFiltros = useCallback(() => {
     setFiltrosAtivos(FILTROS_INICIAIS);
+    setFiltroViva('Todos');
     setBuscaOpcoesFiltro(BUSCAS_OPCOES_INICIAIS);
   }, []);
 
@@ -526,7 +528,9 @@ export default function VendedorTRR_Master() {
     return dados.map((lead) => ({
       'Razão Social': lead.razao_social || '',
       'Nome Fantasia': lead.nome_fantasia || '',
-      'CNPJ': formatarCNPJ(lead.cnpj || ''),
+      'CPF/CNPJ': formatarCNPJ(lead.cnpj || ''),
+      'Cadastro Viva': classificarCliente(lead.cnpj, baseViva),
+      'Data da base Viva': baseViva?.data_base || '',
       'CNPJ Limpo': normalizarCNPJ(lead.cnpj || ''),
       'Logradouro': lead.logradouro || '',
       'Número': lead.numero || '',
@@ -549,7 +553,7 @@ export default function VendedorTRR_Master() {
       'Status do Lead': lead.status_lead || '',
       'Status do Vendedor': lead.status_vendedor || ''
     }));
-  }, []);
+  }, [baseViva]);
 
 
   const aplicarOrdenacaoQuery = useCallback((query) => {
@@ -625,6 +629,7 @@ export default function VendedorTRR_Master() {
 
   const leadsFiltrados = useMemo(() => {
     return leads.filter((lead) => {
+      if (filtroViva !== 'Todos' && lead.cadastro_viva !== filtroViva) return false;
       if (buscaDebounced && !(lead._busca && lead._busca.includes(buscaDebounced))) {
         return false;
       }
@@ -641,7 +646,7 @@ export default function VendedorTRR_Master() {
 
       return true;
     });
-  }, [leads, buscaDebounced, filtrosAtivos]);
+  }, [leads, buscaDebounced, filtrosAtivos, filtroViva]);
 
   const exportarFiltrados = useCallback(async () => {
     try {
@@ -726,6 +731,9 @@ export default function VendedorTRR_Master() {
   const processarCNPJ = useCallback(async (cnpj, leadExistente = {}, opcoes = {}) => {
     const cnpjLimpo = normalizarCNPJ(cnpj);
 
+    if (cnpjLimpo.length === 11) {
+      return { ok: false, erro: 'CPF é aceito no upload de clientes Viva. A consulta automática empresarial é exclusiva para CNPJ.' };
+    }
     if (cnpjLimpo.length !== 14) {
       return { ok: false, erro: 'CNPJ inválido' };
     }
@@ -1016,7 +1024,7 @@ export default function VendedorTRR_Master() {
           const telefone = lead.telefone_1 || lead.telefone_2 || '';
           const linhas = [
             ['Razão social', lead.razao_social || 'Não informado'],
-            ['CNPJ', formatarCNPJ(lead.cnpj || '') || 'Não informado'],
+            ['CPF/CNPJ', formatarCNPJ(lead.cnpj || '') || 'Não informado'],
             ['IE', lead.inscricao_estadual || 'Não informado'],
             ['IM', lead.inscricao_municipal || 'Não informado'],
             ['Contato', lead.contato_nome || 'Não informado'],
@@ -1256,7 +1264,7 @@ export default function VendedorTRR_Master() {
       for (const registro of todosRegistros) {
         const cnpjNormalizado = normalizarCNPJ(registro.cnpj);
 
-        if (!cnpjNormalizado || cnpjNormalizado.length !== 14) continue;
+        if (!cnpjNormalizado || ![11, 14].includes(cnpjNormalizado.length)) continue;
 
         if (!mapa.has(cnpjNormalizado)) {
           mapa.set(cnpjNormalizado, registro.id);
@@ -1305,7 +1313,7 @@ export default function VendedorTRR_Master() {
       const todosLeads = await buscarTodosDoBanco();
       const naoAtivos = (todosLeads || []).filter((lead) => {
         const situacao = String(lead.situacao_cadastral || '').trim().toUpperCase();
-        return situacao && situacao !== 'ATIVA';
+        return normalizarCNPJ(lead.cnpj).length === 14 && situacao && situacao !== 'ATIVA';
       });
 
       if (naoAtivos.length === 0) {
@@ -1785,6 +1793,11 @@ export default function VendedorTRR_Master() {
 
         {moduloAtivo === MODULOS.TODO && (
           <div className="mt-4 space-y-3">
+            <label className="block text-sm text-white">Cadastro na Viva
+              <select value={filtroViva} onChange={e=>{setFiltroViva(e.target.value);setPaginaAtual(1);}} className="ml-2 border rounded p-2 bg-white text-slate-900">
+                {['Todos','Cadastrado na Viva','Não cadastrado na base Viva','A conferir'].map(v=><option key={v}>{v}</option>)}
+              </select>
+            </label>
             <input
               type="text"
               placeholder="Busca rápida..."
@@ -1941,6 +1954,7 @@ export default function VendedorTRR_Master() {
       </header>
 
       <main className="px-4 mt-6">
+        <ClientesViva onBaseChange={setBaseViva} />
         {resultadoBusca && (
           <div className="bg-emerald-50 border border-emerald-500/50 p-4 rounded-2xl mb-6 flex justify-between items-center text-emerald-700 text-xs font-bold animate-pulse gap-3">
             <span>✅ {resultadoBusca}</span>
@@ -2069,7 +2083,7 @@ export default function VendedorTRR_Master() {
             <div className="bg-white p-8 rounded-3xl border border-dashed border-slate-200 text-center">
               <h3 className="text-lg font-black uppercase mb-3 text-slate-900">Upload de arquivo</h3>
               <p className="text-[11px] text-slate-500 mb-4">
-                Envie Excel (.xlsx), texto (.txt) ou PDF textual para pescar CNPJs.
+                Envie Excel (.xlsx), texto (.txt) ou PDF textual para pescar CNPJs de qualquer UF. Para CPF e a relação Viva, use Clientes Viva no Estoque.
               </p>
               <input
                 type="file"
